@@ -1,0 +1,42 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const d=require('fs').readFileSync(0,'utf8');const f=(JSON.parse(d).tool_input||{}).file_path||'';if(/\\.(ts|tsx)$/.test(f)){const{execSync}=require('child_process');try{execSync('npx tsc --noEmit',{stdio:'inherit'})}catch(e){process.exit(2)}}\"",
+            "async": true,
+            "asyncRewake": false,
+            "statusMessage": "Verificando tipos...",
+            "timeout": 60
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const d=require('fs').readFileSync(0,'utf8');const f=(JSON.parse(d).tool_input||{}).file_path||'';if(/\\.test\\.(ts|tsx)$/.test(f)){const{execSync}=require('child_process');try{execSync('npx vitest run --reporter=verbose \\\"'+f+'\\\"',{stdio:'inherit'})}catch(e){process.exit(2)}}\"",
+            "async": true,
+            "asyncRewake": true,
+            "statusMessage": "Ejecutando tests afectados...",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"process.stdout.write(JSON.stringify({systemMessage:'✔ Listo — /cost para ver el consumo · /compact si el contexto es largo'}))\""
+          }
+        ]
+      }
+    ]
+  }
+}
