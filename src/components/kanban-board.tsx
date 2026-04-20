@@ -13,9 +13,9 @@ interface KanbanBoardProps {
 }
 
 export function KanbanBoard({ initialTasks }: KanbanBoardProps) {
-  const { tasks, moveTask } = useMoveTask(initialTasks)
+  const { tasks, moveTask, isDragging } = useMoveTask(initialTasks)
   const tasksByStatus = useTasksByStatus(tasks)
-  const { sensors, activeTask, handleDragStart, handleDragEnd } = useKanbanDnd(tasks, moveTask)
+  const { sensors, activeTask, handleDragStart, handleDragEnd } = useKanbanDnd(tasks, moveTask, isDragging)
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>

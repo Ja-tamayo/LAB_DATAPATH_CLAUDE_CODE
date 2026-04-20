@@ -4,9 +4,10 @@ import { useState } from 'react'
 import { chatWithTasks, type ChatMessage } from '@/actions/chat'
 
 export function useChat() {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [messages, setMessages]       = useState<ChatMessage[]>([])
+  const [isLoading, setIsLoading]     = useState(false)
+  const [error, setError]             = useState<string | null>(null)
+  const [boardChanged, setBoardChanged] = useState(false)
 
   async function sendMessage(content: string) {
     const userMessage: ChatMessage = { role: 'user', content }
@@ -15,10 +16,12 @@ export function useChat() {
     setMessages(next)
     setIsLoading(true)
     setError(null)
+    setBoardChanged(false)
 
     try {
-      const reply = await chatWithTasks(next)
+      const { reply, boardChanged: changed } = await chatWithTasks(next)
       setMessages([...next, { role: 'assistant', content: reply }])
+      if (changed) setBoardChanged(true)
     } catch {
       setError('Error al conectar con el asistente. Intenta de nuevo.')
     } finally {
@@ -26,5 +29,5 @@ export function useChat() {
     }
   }
 
-  return { messages, isLoading, error, sendMessage }
+  return { messages, isLoading, error, boardChanged, sendMessage }
 }

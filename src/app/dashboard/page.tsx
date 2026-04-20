@@ -5,7 +5,6 @@ import { getTasks } from '@/actions/tasks'
 import { logout } from '@/actions/auth'
 import { KanbanBoard } from '@/components/kanban-board'
 import { ChatDrawer } from '@/components/chat-drawer'
-import { VoiceCommandButton } from '@/components/voice-command-button'
 import { SyncEmbeddingsButton } from '@/components/sync-embeddings-button'
 import { NewTaskDialog } from '@/components/new-task-dialog'
 
@@ -39,7 +38,6 @@ export default async function DashboardPage() {
 
         {/* Actions — right side */}
         <div className="flex items-center gap-2">
-          <VoiceCommandButton />
           <ChatDrawer />
           <div className="w-px h-5 bg-white/10 mx-1" />
           <NewTaskDialog />

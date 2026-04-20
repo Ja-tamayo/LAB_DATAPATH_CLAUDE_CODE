@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import type React from 'react'
 import {
   KeyboardSensor,
   PointerSensor,
@@ -16,7 +17,8 @@ const VALID_STATUSES = ['todo', 'in_progress', 'done'] as const
 
 export function useKanbanDnd(
   tasks: Task[],
-  moveTask: (taskId: string, newStatus: TaskStatus) => Promise<void>
+  moveTask: (taskId: string, newStatus: TaskStatus) => Promise<void>,
+  isDragging: React.MutableRefObject<boolean>,
 ) {
   const [activeTask, setActiveTask] = useState<Task | null>(null)
 
@@ -26,12 +28,14 @@ export function useKanbanDnd(
   )
 
   function handleDragStart(event: DragStartEvent) {
+    isDragging.current = true
     const task = tasks.find((t) => t.id === event.active.id) ?? null
     setActiveTask(task)
   }
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
+    isDragging.current = false
     setActiveTask(null)
 
     if (!over) return
