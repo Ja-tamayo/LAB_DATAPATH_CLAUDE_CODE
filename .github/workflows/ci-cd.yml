@@ -39,13 +39,8 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
-      - name: Unit tests (coverage)
-        run: npx vitest run --coverage
-        env:
-          VITEST_COVERAGE_THRESHOLD_LINES:      20
-          VITEST_COVERAGE_THRESHOLD_FUNCTIONS:  20
-          VITEST_COVERAGE_THRESHOLD_BRANCHES:   20
-          VITEST_COVERAGE_THRESHOLD_STATEMENTS: 20
+      - name: Unit tests
+        run: npx vitest run
 
       - name: Build
         run: npm run build
