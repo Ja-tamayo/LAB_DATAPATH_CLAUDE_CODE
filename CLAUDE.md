@@ -8,12 +8,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev          # Start dev server with Turbopack (http://localhost:3000)
 npm run build        # Production build
 npx tsc --noEmit     # Type-check — run after every change
+npx next lint --max-warnings 0  # Lint
 npx vitest run       # Unit tests (one-shot)
 npx vitest           # Unit tests (watch mode)
+npm run test:coverage             # Unit tests with coverage report
 npx playwright test  # E2E tests
 ```
 
-Note: vitest and playwright are installed but no config files or tests exist yet.
+To run a single Vitest test file:
+```bash
+npx vitest run src/actions/__tests__/tasks.test.ts
+```
+
+### Deploy (Vercel CLI)
+
+```bash
+vercel pull --yes --environment=production   # Sync env vars from Vercel
+vercel build --prod                          # Build locally with prod config
+vercel deploy --prebuilt --prod              # Deploy prebuilt output
+```
+
+Required env vars for deploy: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`.
+
+### CI/CD pipeline
+
+`.github/workflows/ci-cd.yml` runs on every push:
+- **CI job** (all branches): lint → tsc → vitest --coverage (threshold 20%) → next build
+- **deploy-production job** (main only, after CI): vercel pull → vercel build --prod → vercel deploy --prod
+
+GitHub Secrets required: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`, `GROQ_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `TEST_USER_EMAIL`, `TEST_USER_PASSWORD`.
 
 ## Environment
 
@@ -44,43 +67,51 @@ Two Supabase clients exist for different contexts:
 
 `src/actions/tasks.ts` holds all `'use server'` mutation functions:
 - `getTasks()` — fetches tasks for the authenticated user, ordered by `position`
-- `createTask()` — inserts into `todo` column at the next available `position`
-- `updateTaskStatus()` — updates status + `updated_at`, then calls `revalidatePath('/dashboard')`
+- `createTask(title, priority, description?)` — inserts into `todo` column at the next available `position`
+- `updateTaskStatus(id, status)` — updates status + `updated_at`, then calls `revalidatePath('/dashboard')`
 
 RLS in Supabase ensures each user only accesses their own rows.
 
 ### AI / RAG layer
 
-The chat sidebar (`src/components/chat/task-chat.tsx`) connects to an AI assistant that has full awareness of the user's tasks:
+The chat drawer (`src/components/chat-drawer.tsx`) slides in from the right and renders `TaskChat`. The assistant can both answer questions and mutate the board.
 
-1. **Chat action** (`src/actions/chat.ts`) — `chatWithTasks()` loads all user tasks, attempts a vector search via `searchTasks()` to find the most relevant ones, then passes both full context + RAG results to `claude-haiku-4-5-20251001` via the Anthropic SDK.
-2. **Embeddings** (`src/lib/embeddings.ts`) — calls Voyage AI (`voyage-3.5` model) to generate vector embeddings. Use `inputType: 'document'` when storing, `'query'` when searching.
-3. **Embed helper** (`src/lib/embed-task.ts`) — `buildTaskContent()` serializes a task to a single string; `embedTask()` generates its embedding.
-4. **Search action** (`src/actions/search.ts`) — `searchTasks()` generates a query embedding and calls the Supabase RPC `match_task_embeddings` (cosine similarity, threshold 0.4, top 5).
-5. **Backfill script** (`src/scripts/embed-all-tasks.ts`) — run manually to embed existing tasks that predate the trigger.
+**Tool use (agentic)** — `chatWithTasks()` in `src/actions/chat.ts` exposes two Claude tools:
+- `create_task` — calls `createTask()` when the user asks to add a task
+- `move_task` — calls `updateTaskStatus()` when the user asks to move a task
 
-The Postgres `pg_vector` trigger (migration `007`) auto-embeds tasks on insert/update via a Supabase Edge Function. Migration `008` drops the `pg_net` trigger variant in favor of a direct approach.
+Flow: user message → load all tasks + RAG context → first Claude call → if `stop_reason === 'tool_use'`, execute tools → second Claude call with tool results → return `{ reply, boardChanged }`. When `boardChanged` is `true`, `TaskChat` calls `router.refresh()` to re-fetch the Server Component.
+
+**RAG** — `src/actions/search.ts` generates a query embedding via Voyage AI and calls the Supabase RPC `match_task_embeddings` (cosine similarity, threshold 0.4, top 5). Results are injected as additional context into the system prompt. RAG failures are silent — the chat falls back to full task context.
+
+**Embeddings** — `src/lib/embeddings.ts` calls Voyage AI (`voyage-3.5`). Use `inputType: 'document'` when storing, `'query'` when searching. `src/lib/embed-task.ts` serializes a task to a string and generates its embedding.
+
+The Postgres `pg_vector` trigger (migration `007`) auto-embeds tasks on insert/update via a Supabase Edge Function. `src/scripts/embed-all-tasks.ts` backfills existing tasks.
+
+### Voice commands
+
+Voice input is integrated directly into `TaskChat` (`src/components/chat/task-chat.tsx`). The mic button uses `useVoiceCommand` (`src/hooks/use-voice-command.ts`) — Web Speech API with `lang: 'es-ES'`. On transcript, it calls `sendMessage()` directly, routing through the same agentic chat pipeline. All Web Speech API types are defined inline in that hook (no external `@types` dependency).
 
 ### Kanban board
 
-The board is split across three layers:
+Split across three layers:
 
-1. **State & logic** (hooks in `src/hooks/`):
+1. **State & logic** (`src/hooks/`):
    - `use-move-task.ts` — owns `tasks` state, performs optimistic updates, reverts on error
    - `use-tasks-by-status.ts` — memoizes tasks grouped by column
    - `use-kanban-dnd.ts` — encapsulates all `@dnd-kit` logic (sensors, drag start/end)
 
 2. **Presentation** (`src/components/`):
-   - `KanbanBoard` — thin Client Component, wires the 3 hooks together, renders `DndContext` + `DragOverlay`
+   - `KanbanBoard` — thin Client Component, wires the 3 hooks, renders `DndContext` + `DragOverlay`
    - `KanbanColumn` — uses `useDroppable` + `SortableContext`, visual `isOver` feedback
    - `SortableTaskCard` — wraps `TaskCard` with `useSortable`
-   - `TaskCard` — pure presentational component, no hooks, accepts `isDragging` prop
+   - `TaskCard` — pure presentational, no hooks, accepts `isDragging` prop
 
-3. **Critical DnD fix** in `use-kanban-dnd.ts`: when `over.id` is a card UUID (dropping on top of another card), it resolves the target column by looking up that card's `status`. When `over.id` is a `TaskStatus` string (dropping on empty column area), it uses it directly.
+3. **Critical DnD fix** in `use-kanban-dnd.ts`: when `over.id` is a card UUID (dropping on another card), resolve the target column by looking up that card's `status`. When `over.id` is a `TaskStatus` string (dropping on empty column area), use it directly.
 
 ### Types
 
-`src/types/tasks.ts` is the single source of truth for `Task`, `TaskStatus`, `TaskPriority`, `KANBAN_COLUMNS`, and `PRIORITY_CONFIG`. The ENUMs match the Postgres `task_priority` and `task_status` types defined in migrations.
+`src/types/tasks.ts` is the single source of truth for `Task`, `TaskStatus`, `TaskPriority`, `KANBAN_COLUMNS`, and `PRIORITY_CONFIG`. The ENUMs match the Postgres `task_priority` and `task_status` types in migrations.
 
 ### Database migrations
 
