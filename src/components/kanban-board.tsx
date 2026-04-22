@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useId } from 'react'
 import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core'
 import { type Task, type UserRole, KANBAN_COLUMNS } from '@/types/tasks'
 import { type UserOption } from '@/actions/users'
@@ -24,6 +24,7 @@ export function KanbanBoard({
   users = [],
   currentUserId = '',
 }: KanbanBoardProps) {
+  const dndId = useId()
   const { tasks, moveTask, isDragging } = useMoveTask(initialTasks)
   const tasksByStatus = useTasksByStatus(tasks)
   const { sensors, activeTask, handleDragStart, handleDragEnd } = useKanbanDnd(tasks, moveTask, isDragging)
@@ -32,12 +33,13 @@ export function KanbanBoard({
   return (
     <>
       <DndContext
+        id={dndId}
         sensors={sensors}
         collisionDetection={closestCorners}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {KANBAN_COLUMNS.map((col) => (
             <KanbanColumn
               key={col.status}

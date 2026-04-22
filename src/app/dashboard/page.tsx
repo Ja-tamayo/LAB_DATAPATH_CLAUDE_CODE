@@ -79,7 +79,7 @@ export default async function DashboardPage({
       </Suspense>
 
       {/* Kanban board */}
-      <main className="flex-1 p-4 overflow-auto">
+      <main className="flex-1 px-4 py-3 overflow-auto">
         <KanbanBoard
           initialTasks={tasks}
           role={role as UserRole}

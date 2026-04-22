@@ -19,9 +19,9 @@ export function KanbanColumn({ id, label, tasks, onClickTask }: KanbanColumnProp
   return (
     <div className="flex flex-col">
       {/* Header */}
-      <div className="flex items-center gap-2 mb-3 px-1">
-        <span className="font-medium text-white">{label}</span>
-        <span className="bg-white/10 text-neutral-400 text-xs font-semibold px-2 py-0.5 rounded-full">
+      <div className="flex items-center gap-2 mb-2 px-1">
+        <span className="text-xs font-semibold text-neutral-300 uppercase tracking-wide">{label}</span>
+        <span className="bg-white/10 text-neutral-400 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
           {tasks.length}
         </span>
       </div>
@@ -31,11 +31,11 @@ export function KanbanColumn({ id, label, tasks, onClickTask }: KanbanColumnProp
         <div
           ref={setNodeRef}
           className={cn(
-            'flex-1 min-h-96 rounded-xl border p-3 flex flex-col gap-2',
+            'flex-1 min-h-48 rounded-lg border p-2 flex flex-col gap-1.5',
             'transition-colors duration-200',
             isOver
               ? 'border-blue-500/50 bg-blue-500/5'
-              : 'border-white/10 bg-white/5'
+              : 'border-white/10 bg-white/[0.03]'
           )}
         >
           {tasks.length === 0 ? (

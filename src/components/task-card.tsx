@@ -1,4 +1,4 @@
-import { Check, GripVertical, Clock, Calendar, Crown, Play } from 'lucide-react'
+import { Check, GripVertical, Clock, Calendar } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { type Task, PRIORITY_CONFIG, URGENCY_CONFIG, tokensToHours, getUrgency } from '@/types/tasks'
 
@@ -38,96 +38,94 @@ export function TaskCard({ task, isDragging = false, onClick }: TaskCardProps) {
     <div
       onClick={onClick}
       className={cn(
-        'bg-white/5 border rounded-lg p-3',
+        'bg-white/5 border rounded-md px-2.5 py-2',
         'cursor-grab active:cursor-grabbing',
-        'flex items-start gap-2 transition-all',
+        'flex items-start gap-1.5 transition-all',
         urgency === 'critical' ? 'border-red-500/30' : 'border-white/5',
         onClick && 'hover:bg-white/8 hover:border-white/10',
         isDragging && 'opacity-50 rotate-2 shadow-xl scale-105',
       )}
     >
       <div className="flex-1 min-w-0">
-        {/* Priority + urgency + done */}
-        <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+        {/* Priority + urgency badges in one compact row */}
+        <div className="flex items-center gap-1 mb-1 flex-wrap">
           <span className={cn(
-            'inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wide',
+            'inline-block px-1 py-px rounded text-[9px] font-semibold tracking-wide',
             priority.className,
           )}>
             {priority.label}
           </span>
           {showUrgency && (
             <span className={cn(
-              'inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wide',
+              'inline-block px-1 py-px rounded text-[9px] font-semibold tracking-wide',
               urgencyConfig.className,
             )}>
               {urgencyConfig.label}
             </span>
           )}
           {task.status === 'done' && (
-            <Check className="w-3.5 h-3.5 text-green-400 shrink-0" />
+            <Check className="w-3 h-3 text-green-400 shrink-0" />
           )}
         </div>
 
         {/* Title */}
-        <p className="text-sm font-medium text-white leading-snug">
+        <p className="text-xs font-medium text-white leading-snug line-clamp-2">
           {task.title}
         </p>
 
-        {/* Description */}
+        {/* Description — single line only */}
         {task.description && (
-          <p className="text-xs text-neutral-400 mt-1 line-clamp-2">
+          <p className="text-[10px] text-neutral-500 mt-0.5 line-clamp-1">
             {task.description}
           </p>
         )}
 
         {/* Footer meta */}
-        <div className="flex items-center gap-2 mt-2 flex-wrap">
-          {/* Due date */}
+        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
           {task.due_date && (
             <span className={cn(
-              'flex items-center gap-0.5 text-[10px]',
-              overdue ? 'text-red-400' : 'text-neutral-500',
+              'flex items-center gap-0.5 text-[9px]',
+              overdue ? 'text-red-400' : 'text-neutral-600',
             )}>
-              <Calendar className="w-2.5 h-2.5" />
+              <Calendar className="w-2 h-2" />
               {formatDate(task.due_date)}
             </span>
           )}
 
-          {/* Effort tokens */}
           {task.effort_tokens != null && task.effort_tokens > 0 && (
-            <span className="flex items-center gap-0.5 text-[10px] text-neutral-500">
-              <Clock className="w-2.5 h-2.5" />
+            <span className="flex items-center gap-0.5 text-[9px] text-neutral-600">
+              <Clock className="w-2 h-2" />
               {tokensToHours(task.effort_tokens) >= 1
                 ? `${tokensToHours(task.effort_tokens).toFixed(1)}h`
                 : `${task.effort_tokens * 15}m`}
             </span>
           )}
 
-          {/* Owner badges (right-aligned) */}
-          <div className="ml-auto flex items-center gap-1">
-            {/* Task owner (Crown = functional owner) */}
-            {hasDistinctOwner && (
-              <span
-                title="Propietario de tarea"
-                className="w-5 h-5 rounded-full bg-violet-600/30 text-violet-300 text-[9px] font-bold flex items-center justify-center shrink-0"
-              >
-                {getInitials(task.task_owner_id!)}
-              </span>
-            )}
-            {/* Execution owner */}
-            {hasDistinctExecutor && (
-              <span
-                title="Responsable de ejecución"
-                className="w-5 h-5 rounded-full bg-blue-600/30 text-blue-300 text-[9px] font-bold flex items-center justify-center shrink-0"
-              >
-                {getInitials(task.assigned_to!)}
-              </span>
-            )}
-          </div>
+          {/* Owner avatars */}
+          {(hasDistinctOwner || hasDistinctExecutor) && (
+            <div className="ml-auto flex items-center gap-0.5">
+              {hasDistinctOwner && (
+                <span
+                  title="Propietario de tarea"
+                  className="w-4 h-4 rounded-full bg-violet-600/30 text-violet-300 text-[8px] font-bold flex items-center justify-center shrink-0"
+                >
+                  {getInitials(task.task_owner_id!)}
+                </span>
+              )}
+              {hasDistinctExecutor && (
+                <span
+                  title="Responsable de ejecución"
+                  className="w-4 h-4 rounded-full bg-blue-600/30 text-blue-300 text-[8px] font-bold flex items-center justify-center shrink-0"
+                >
+                  {getInitials(task.assigned_to!)}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
-      <GripVertical className="w-4 h-4 text-neutral-500 shrink-0 mt-0.5" />
+      <GripVertical className="w-3 h-3 text-neutral-600 shrink-0 mt-0.5" />
     </div>
   )
 }
