@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { type UserRole } from '@/types/tasks'
 
@@ -9,6 +10,24 @@ export interface UserOption {
   full_name: string | null
   role: UserRole
   weekly_capacity_tokens: number
+}
+
+export async function updateProfile(fullName: string): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const trimmed = fullName.trim()
+  if (!trimmed) return { error: 'El nombre no puede estar vacío' }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ full_name: trimmed })
+    .eq('id', user.id)
+
+  if (error) return { error: error.message }
+  revalidatePath('/dashboard', 'layout')
+  return { error: null }
 }
 
 export async function getUsers(): Promise<UserOption[]> {
