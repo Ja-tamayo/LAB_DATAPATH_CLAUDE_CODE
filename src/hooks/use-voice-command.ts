@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 
 export type VoiceState = 'idle' | 'listening' | 'processing' | 'success' | 'error'
 
@@ -50,9 +50,12 @@ function getSpeechRecognitionAPI(): (new () => ISpeechRecognition) | null {
 
 export function useVoiceCommand(onTranscript: (transcript: string) => Promise<void>) {
   const [state, setState] = useState<VoiceState>('idle')
+  const [isSupported, setIsSupported] = useState(false)
   const recognitionRef = useRef<ISpeechRecognition | null>(null)
 
-  const isSupported = typeof window !== 'undefined' && getSpeechRecognitionAPI() !== null
+  useEffect(() => {
+    setIsSupported(getSpeechRecognitionAPI() !== null)
+  }, [])
 
   const start = useCallback(() => {
     const SpeechAPI = getSpeechRecognitionAPI()

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { generateEmbedding, generateEmbeddingsBatch } from '@/lib/embeddings'
 import { buildTaskContent } from '@/lib/embed-task'
 import { type Task } from '@/types/tasks'
+import { getCurrentUserRole } from '@/actions/tasks'
 
 /** Embebe una tarea y hace delete+insert en task_embeddings */
 export async function embedUserTask(task: Task): Promise<void> {
@@ -19,8 +20,11 @@ export async function embedUserTask(task: Task): Promise<void> {
   if (error) throw new Error(error.message)
 }
 
-/** Embebe todas las tareas en un solo request a Voyage AI */
+/** Embebe todas las tareas en un solo request a Voyage AI — solo admin_system */
 export async function embedAllUserTasks(): Promise<{ ok: number; fail: number }> {
+  const role = await getCurrentUserRole()
+  if (role !== 'admin_system') throw new Error('Solo administradores pueden sincronizar embeddings')
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('No autenticado')

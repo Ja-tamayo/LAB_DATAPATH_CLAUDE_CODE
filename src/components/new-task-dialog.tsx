@@ -3,36 +3,38 @@
 import { useState, useTransition } from 'react'
 import { Plus } from 'lucide-react'
 import { createTask } from '@/actions/tasks'
-import { PRIORITY_CONFIG, type TaskPriority } from '@/types/tasks'
+import { PRIORITY_CONFIG, type TaskPriority, type UserRole } from '@/types/tasks'
+import { type UserOption } from '@/actions/users'
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogTrigger,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 
-export function NewTaskDialog() {
-  const [open, setOpen] = useState(false)
-  const [title, setTitle] = useState('')
-  const [priority, setPriority] = useState<TaskPriority>('medium')
+interface NewTaskDialogProps {
+  role?: UserRole
+  users?: UserOption[]   // available for leader/admin to assign
+  currentUserId?: string
+}
+
+export function NewTaskDialog({ role = 'collaborator', users = [], currentUserId }: NewTaskDialogProps) {
+  const [open, setOpen]             = useState(false)
+  const [title, setTitle]           = useState('')
+  const [priority, setPriority]     = useState<TaskPriority>('medium')
   const [description, setDescription] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [assignedTo, setAssignedTo] = useState<string>(currentUserId ?? '')
+  const [error, setError]           = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  const canAssign = role === 'leader' || role === 'admin_system'
 
   function reset() {
     setTitle('')
     setPriority('medium')
     setDescription('')
+    setAssignedTo(currentUserId ?? '')
     setError(null)
   }
 
@@ -43,13 +45,15 @@ export function NewTaskDialog() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!title.trim()) {
-      setError('El título es requerido')
-      return
-    }
+    if (!title.trim()) { setError('El título es requerido'); return }
     setError(null)
     startTransition(async () => {
-      const result = await createTask(title.trim(), priority, description.trim() || undefined)
+      const result = await createTask(
+        title.trim(),
+        priority,
+        description.trim() || undefined,
+        canAssign ? assignedTo || undefined : undefined,
+      )
       if (result.error) {
         setError(result.error)
       } else {
@@ -74,6 +78,7 @@ export function NewTaskDialog() {
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-2">
+          {/* Title */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs text-neutral-400">Título *</label>
             <Input
@@ -86,6 +91,7 @@ export function NewTaskDialog() {
             />
           </div>
 
+          {/* Priority */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs text-neutral-400">Prioridad</label>
             <Select value={priority} onValueChange={val => setPriority(val as TaskPriority)}>
@@ -104,6 +110,27 @@ export function NewTaskDialog() {
             </Select>
           </div>
 
+          {/* Assigned to — only for leader/admin */}
+          {canAssign && users.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-neutral-400">Asignar a</label>
+              <Select value={assignedTo} onValueChange={setAssignedTo}>
+                <SelectTrigger className="w-full bg-white/5 border-white/10 text-white">
+                  <SelectValue placeholder="Seleccionar usuario..." />
+                </SelectTrigger>
+                <SelectContent className="bg-[#1a1a2e] border-white/10 text-white">
+                  {users.map((u) => (
+                    <SelectItem key={u.id} value={u.id} className="text-white focus:bg-white/10">
+                      {u.full_name ?? u.id.slice(0, 8)}
+                      {u.id === currentUserId && ' (yo)'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Description */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs text-neutral-400">Descripción (opcional)</label>
             <Input
@@ -117,7 +144,7 @@ export function NewTaskDialog() {
 
           {error && <p className="text-xs text-red-400">{error}</p>}
 
-          <DialogFooter className="bg-transparent border-none -mx-0 -mb-0 pt-2">
+          <DialogFooter className="bg-transparent border-none pt-2">
             <button
               type="submit"
               disabled={isPending}

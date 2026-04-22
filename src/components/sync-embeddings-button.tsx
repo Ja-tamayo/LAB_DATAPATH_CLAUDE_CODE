@@ -3,12 +3,20 @@
 import { useState } from 'react'
 import { RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react'
 import { embedAllUserTasks } from '@/actions/embeddings'
+import { type UserRole } from '@/types/tasks'
 
-type State = 'idle' | 'loading' | 'done' | 'error'
+type SyncState = 'idle' | 'loading' | 'done' | 'error'
 
-export function SyncEmbeddingsButton() {
-  const [state, setState] = useState<State>('idle')
+interface SyncEmbeddingsButtonProps {
+  role?: UserRole
+}
+
+export function SyncEmbeddingsButton({ role }: SyncEmbeddingsButtonProps) {
+  const [state, setState]   = useState<SyncState>('idle')
   const [result, setResult] = useState<{ ok: number; fail: number } | null>(null)
+
+  // Only admin_system can sync embeddings
+  if (role !== 'admin_system') return null
 
   async function handleSync() {
     setState('loading')
@@ -25,7 +33,7 @@ export function SyncEmbeddingsButton() {
     return (
       <span className="flex items-center gap-1.5 text-xs text-green-400">
         <CheckCircle2 className="w-3.5 h-3.5" />
-        {result.ok} tareas sincronizadas
+        {result.ok} sincronizadas
       </span>
     )
   }
