@@ -21,7 +21,7 @@
             "type": "command",
             "command": "node -e \"const d=require('fs').readFileSync(0,'utf8');const f=(JSON.parse(d).tool_input||{}).file_path||'';if(/\\.test\\.(ts|tsx)$/.test(f)){const{execSync}=require('child_process');try{execSync('npx vitest run --reporter=verbose \\\"'+f+'\\\"',{stdio:'inherit'})}catch(e){process.exit(2)}}\"",
             "async": true,
-            "asyncRewake": true,
+            "asyncRewake": false,
             "statusMessage": "Ejecutando tests afectados...",
             "timeout": 60
           }

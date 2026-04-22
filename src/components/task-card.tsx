@@ -1,6 +1,6 @@
-import { Check, GripVertical, Clock, Calendar } from 'lucide-react'
+import { Check, GripVertical, Clock, Calendar, Crown, Play } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { type Task, PRIORITY_CONFIG, tokensToHours } from '@/types/tasks'
+import { type Task, PRIORITY_CONFIG, URGENCY_CONFIG, tokensToHours, getUrgency } from '@/types/tasks'
 
 interface TaskCardProps {
   task: Task
@@ -24,27 +24,45 @@ function formatDate(date: string): string {
 export function TaskCard({ task, isDragging = false, onClick }: TaskCardProps) {
   const priority = PRIORITY_CONFIG[task.priority]
   const overdue  = task.status !== 'done' && isOverdue(task.due_date)
+  const urgency  = getUrgency(task)
+  const urgencyConfig = URGENCY_CONFIG[urgency]
+
+  // Show urgency badge only if urgency adds info beyond priority alone
+  const showUrgency = urgency === 'critical' || (urgency === 'high' && task.priority !== 'critical')
+
+  // Separate avatar badges: task owner vs execution owner
+  const hasDistinctOwner    = task.task_owner_id && task.task_owner_id !== task.user_id
+  const hasDistinctExecutor = task.assigned_to   && task.assigned_to   !== task.task_owner_id && task.assigned_to !== task.user_id
 
   return (
     <div
       onClick={onClick}
       className={cn(
-        'bg-white/5 border border-white/5 rounded-lg p-3',
+        'bg-white/5 border rounded-lg p-3',
         'cursor-grab active:cursor-grabbing',
         'flex items-start gap-2 transition-all',
+        urgency === 'critical' ? 'border-red-500/30' : 'border-white/5',
         onClick && 'hover:bg-white/8 hover:border-white/10',
         isDragging && 'opacity-50 rotate-2 shadow-xl scale-105',
       )}
     >
       <div className="flex-1 min-w-0">
-        {/* Priority + done check */}
-        <div className="flex items-center gap-2 mb-1.5">
+        {/* Priority + urgency + done */}
+        <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
           <span className={cn(
             'inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wide',
             priority.className,
           )}>
             {priority.label}
           </span>
+          {showUrgency && (
+            <span className={cn(
+              'inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wide',
+              urgencyConfig.className,
+            )}>
+              {urgencyConfig.label}
+            </span>
+          )}
           {task.status === 'done' && (
             <Check className="w-3.5 h-3.5 text-green-400 shrink-0" />
           )}
@@ -85,12 +103,27 @@ export function TaskCard({ task, isDragging = false, onClick }: TaskCardProps) {
             </span>
           )}
 
-          {/* Assigned to initials */}
-          {task.assigned_to && task.assigned_to !== task.user_id && (
-            <span className="ml-auto w-5 h-5 rounded-full bg-blue-600/40 text-blue-300 text-[9px] font-bold flex items-center justify-center shrink-0">
-              {getInitials(task.assigned_to)}
-            </span>
-          )}
+          {/* Owner badges (right-aligned) */}
+          <div className="ml-auto flex items-center gap-1">
+            {/* Task owner (Crown = functional owner) */}
+            {hasDistinctOwner && (
+              <span
+                title="Propietario de tarea"
+                className="w-5 h-5 rounded-full bg-violet-600/30 text-violet-300 text-[9px] font-bold flex items-center justify-center shrink-0"
+              >
+                {getInitials(task.task_owner_id!)}
+              </span>
+            )}
+            {/* Execution owner */}
+            {hasDistinctExecutor && (
+              <span
+                title="Responsable de ejecución"
+                className="w-5 h-5 rounded-full bg-blue-600/30 text-blue-300 text-[9px] font-bold flex items-center justify-center shrink-0"
+              >
+                {getInitials(task.assigned_to!)}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

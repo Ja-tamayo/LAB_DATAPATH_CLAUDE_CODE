@@ -38,6 +38,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
   return {
     id: 'task-1',
     user_id: 'user-1',
+    task_owner_id: null,
     assigned_to: null,
     title: 'Test Task',
     description: null,

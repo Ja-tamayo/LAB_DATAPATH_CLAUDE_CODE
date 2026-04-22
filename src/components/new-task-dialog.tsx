@@ -3,7 +3,10 @@
 import { useState, useTransition } from 'react'
 import { Plus } from 'lucide-react'
 import { createTask } from '@/actions/tasks'
-import { PRIORITY_CONFIG, type TaskPriority, type UserRole } from '@/types/tasks'
+import {
+  PRIORITY_CONFIG, IMPACT_CONFIG,
+  type TaskPriority, type ImpactLevel, type UserRole,
+} from '@/types/tasks'
 import { type UserOption } from '@/actions/users'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
@@ -15,26 +18,30 @@ import {
 
 interface NewTaskDialogProps {
   role?: UserRole
-  users?: UserOption[]   // available for leader/admin to assign
+  users?: UserOption[]
   currentUserId?: string
 }
 
 export function NewTaskDialog({ role = 'collaborator', users = [], currentUserId }: NewTaskDialogProps) {
-  const [open, setOpen]             = useState(false)
-  const [title, setTitle]           = useState('')
-  const [priority, setPriority]     = useState<TaskPriority>('medium')
+  const [open, setOpen]               = useState(false)
+  const [title, setTitle]             = useState('')
+  const [priority, setPriority]       = useState<TaskPriority>('medium')
+  const [impact, setImpact]           = useState<ImpactLevel | ''>('')
   const [description, setDescription] = useState('')
-  const [assignedTo, setAssignedTo] = useState<string>(currentUserId ?? '')
-  const [error, setError]           = useState<string | null>(null)
-  const [isPending, startTransition] = useTransition()
+  const [tokens, setTokens]           = useState('')
+  const [dueDate, setDueDate]         = useState('')
+  const [assignedTo, setAssignedTo]   = useState<string>(currentUserId ?? '')
+  const [taskOwner, setTaskOwner]     = useState<string>(currentUserId ?? '')
+  const [error, setError]             = useState<string | null>(null)
+  const [isPending, startTransition]  = useTransition()
 
   const canAssign = role === 'leader' || role === 'admin_system'
 
   function reset() {
-    setTitle('')
-    setPriority('medium')
-    setDescription('')
+    setTitle(''); setPriority('medium'); setImpact(''); setDescription('')
+    setTokens(''); setDueDate('')
     setAssignedTo(currentUserId ?? '')
+    setTaskOwner(currentUserId ?? '')
     setError(null)
   }
 
@@ -53,6 +60,7 @@ export function NewTaskDialog({ role = 'collaborator', users = [], currentUserId
         priority,
         description.trim() || undefined,
         canAssign ? assignedTo || undefined : undefined,
+        canAssign ? taskOwner  || undefined : undefined,
       )
       if (result.error) {
         setError(result.error)
@@ -66,89 +74,150 @@ export function NewTaskDialog({ role = 'collaborator', users = [], currentUserId
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <button className="flex items-center gap-2 bg-green-500 hover:bg-green-600 transition-colors text-white text-sm font-medium px-4 py-2 rounded-lg">
-          <Plus className="w-4 h-4" />
-          Nueva Tarea
+        <button className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 transition-colors text-white text-xs font-medium px-3 py-1.5 rounded-lg">
+          <Plus className="w-3.5 h-3.5" />
+          Nueva tarea
         </button>
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-md bg-[#1a1a2e] border-white/10 text-white">
+      <DialogContent className="sm:max-w-lg bg-[#1a1a2e] border-white/10 text-white">
         <DialogHeader>
-          <DialogTitle className="text-white">Nueva tarea</DialogTitle>
+          <DialogTitle className="text-white text-sm">Nueva tarea</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-2">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3 mt-1">
+
           {/* Title */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs text-neutral-400">Título *</label>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] text-neutral-400 uppercase tracking-wider">Título *</label>
             <Input
               type="text"
               placeholder="Escribe el título de la tarea..."
               value={title}
               onChange={e => setTitle(e.target.value)}
-              className="bg-white/5 border-white/10 text-white placeholder:text-neutral-500"
+              className="bg-white/5 border-white/10 text-white placeholder:text-neutral-500 text-sm"
               autoFocus
             />
           </div>
 
-          {/* Priority */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs text-neutral-400">Prioridad</label>
-            <Select value={priority} onValueChange={val => setPriority(val as TaskPriority)}>
-              <SelectTrigger className="w-full bg-white/5 border-white/10 text-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-[#1a1a2e] border-white/10 text-white">
-                {(Object.entries(PRIORITY_CONFIG) as [TaskPriority, typeof PRIORITY_CONFIG[TaskPriority]][]).map(
-                  ([value, { label }]) => (
-                    <SelectItem key={value} value={value} className="text-white focus:bg-white/10">
-                      {label}
-                    </SelectItem>
-                  ),
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Assigned to — only for leader/admin */}
-          {canAssign && users.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-neutral-400">Asignar a</label>
-              <Select value={assignedTo} onValueChange={setAssignedTo}>
-                <SelectTrigger className="w-full bg-white/5 border-white/10 text-white">
-                  <SelectValue placeholder="Seleccionar usuario..." />
+          {/* Priority + Impact */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] text-neutral-400 uppercase tracking-wider">Prioridad</label>
+              <Select value={priority} onValueChange={val => setPriority(val as TaskPriority)}>
+                <SelectTrigger className="w-full bg-white/5 border-white/10 text-white text-xs h-8">
+                  <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-[#1a1a2e] border-white/10 text-white">
-                  {users.map((u) => (
-                    <SelectItem key={u.id} value={u.id} className="text-white focus:bg-white/10">
-                      {u.full_name ?? u.id.slice(0, 8)}
-                      {u.id === currentUserId && ' (yo)'}
-                    </SelectItem>
-                  ))}
+                <SelectContent className="bg-[#1a1a2e] border-white/10 text-white z-[60]">
+                  {(Object.entries(PRIORITY_CONFIG) as [TaskPriority, typeof PRIORITY_CONFIG[TaskPriority]][]).map(
+                    ([value, { label }]) => (
+                      <SelectItem key={value} value={value} className="text-white focus:bg-white/10 text-xs">
+                        {label}
+                      </SelectItem>
+                    ),
+                  )}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] text-neutral-400 uppercase tracking-wider">Impacto</label>
+              <Select value={impact} onValueChange={val => setImpact(val as ImpactLevel)}>
+                <SelectTrigger className="w-full bg-white/5 border-white/10 text-white text-xs h-8">
+                  <SelectValue placeholder="Opcional" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#1a1a2e] border-white/10 text-white z-[60]">
+                  {(Object.entries(IMPACT_CONFIG) as [ImpactLevel, typeof IMPACT_CONFIG[ImpactLevel]][]).map(
+                    ([value, { label }]) => (
+                      <SelectItem key={value} value={value} className="text-white focus:bg-white/10 text-xs">
+                        {label}
+                      </SelectItem>
+                    ),
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Tokens + Due date */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] text-neutral-400 uppercase tracking-wider">Tokens (1=15min)</label>
+              <Input
+                type="number"
+                min={0}
+                placeholder="0"
+                value={tokens}
+                onChange={e => setTokens(e.target.value)}
+                className="bg-white/5 border-white/10 text-white placeholder:text-neutral-500 text-xs h-8"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] text-neutral-400 uppercase tracking-wider">Fecha límite</label>
+              <Input
+                type="date"
+                value={dueDate}
+                onChange={e => setDueDate(e.target.value)}
+                className="bg-white/5 border-white/10 text-white text-xs h-8"
+              />
+            </div>
+          </div>
+
+          {/* Responsible fields — leader/admin only */}
+          {canAssign && users.length > 0 && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] text-neutral-400 uppercase tracking-wider">Propietario</label>
+                <Select value={taskOwner} onValueChange={setTaskOwner}>
+                  <SelectTrigger className="w-full bg-white/5 border-white/10 text-white text-xs h-8">
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#1a1a2e] border-white/10 text-white z-[60]">
+                    {users.map((u) => (
+                      <SelectItem key={u.id} value={u.id} className="text-white focus:bg-white/10 text-xs">
+                        {u.full_name ?? u.id.slice(0, 8)}{u.id === currentUserId && ' (yo)'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] text-neutral-400 uppercase tracking-wider">Responsable ejecución</label>
+                <Select value={assignedTo} onValueChange={setAssignedTo}>
+                  <SelectTrigger className="w-full bg-white/5 border-white/10 text-white text-xs h-8">
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#1a1a2e] border-white/10 text-white z-[60]">
+                    {users.map((u) => (
+                      <SelectItem key={u.id} value={u.id} className="text-white focus:bg-white/10 text-xs">
+                        {u.full_name ?? u.id.slice(0, 8)}{u.id === currentUserId && ' (yo)'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           )}
 
           {/* Description */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs text-neutral-400">Descripción (opcional)</label>
-            <Input
-              type="text"
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] text-neutral-400 uppercase tracking-wider">Descripción (opcional)</label>
+            <textarea
               placeholder="Describe la tarea..."
               value={description}
               onChange={e => setDescription(e.target.value)}
-              className="bg-white/5 border-white/10 text-white placeholder:text-neutral-500"
+              rows={2}
+              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-blue-500 resize-none"
             />
           </div>
 
           {error && <p className="text-xs text-red-400">{error}</p>}
 
-          <DialogFooter className="bg-transparent border-none pt-2">
+          <DialogFooter className="bg-transparent border-none pt-1">
             <button
               type="submit"
               disabled={isPending}
-              className="bg-green-500 hover:bg-green-600 disabled:opacity-50 transition-colors text-white text-sm font-medium px-4 py-2 rounded-lg"
+              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition-colors text-white text-xs font-medium px-4 py-2 rounded-lg"
             >
               {isPending ? 'Creando...' : 'Crear tarea'}
             </button>

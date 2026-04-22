@@ -2,7 +2,10 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { type Task, type TaskStatus, type TaskPriority, type UserRole } from '@/types/tasks'
+import {
+  type Task, type TaskStatus, type TaskPriority, type UserRole,
+  type TaskFilters, getUrgency,
+} from '@/types/tasks'
 
 export async function getCurrentUserRole(): Promise<UserRole> {
   const supabase = await createClient()
@@ -24,7 +27,6 @@ export async function updateTaskStatus(taskId: string, newStatus: TaskStatus): P
   const now = new Date().toISOString()
   const updates: Record<string, unknown> = { status: newStatus, updated_at: now }
 
-  // Lifecycle: set started_at when moving to in_progress (only if not already set)
   if (newStatus === 'in_progress') {
     const { data: current } = await supabase
       .from('tasks')
@@ -34,10 +36,8 @@ export async function updateTaskStatus(taskId: string, newStatus: TaskStatus): P
     if (!current?.started_at) updates.started_at = now
   }
 
-  // Lifecycle: set completed_at when moving to done
   if (newStatus === 'done') {
     updates.completed_at = now
-    // Also set started_at if it was never set
     const { data: current } = await supabase
       .from('tasks')
       .select('started_at')
@@ -46,7 +46,6 @@ export async function updateTaskStatus(taskId: string, newStatus: TaskStatus): P
     if (!current?.started_at) updates.started_at = now
   }
 
-  // Lifecycle: clear completed_at when moving back from done
   if (newStatus === 'todo' || newStatus === 'in_progress') {
     updates.completed_at = null
   }
@@ -66,6 +65,7 @@ export async function createTask(
   priority: TaskPriority,
   description?: string,
   assignedTo?: string,
+  taskOwnerId?: string,
 ): Promise<{ error: string | null }> {
   const supabase = await createClient()
 
@@ -74,11 +74,11 @@ export async function createTask(
 
   const role = await getCurrentUserRole()
 
-  // Collaborators can only assign to themselves
   const resolvedAssignedTo =
     role === 'collaborator' ? user.id : (assignedTo ?? user.id)
+  const resolvedTaskOwner =
+    role === 'collaborator' ? user.id : (taskOwnerId ?? resolvedAssignedTo)
 
-  // Get max position for the todo column
   const { data: existing } = await supabase
     .from('tasks')
     .select('position')
@@ -89,12 +89,13 @@ export async function createTask(
   const position = existing && existing.length > 0 ? existing[0].position + 1 : 0
 
   const { error } = await supabase.from('tasks').insert({
-    user_id:     user.id,
-    assigned_to: resolvedAssignedTo,
+    user_id:       user.id,
+    task_owner_id: resolvedTaskOwner,
+    assigned_to:   resolvedAssignedTo,
     title,
-    description: description ?? null,
+    description:   description ?? null,
     priority,
-    status:   'todo',
+    status:        'todo',
     position,
   })
 
@@ -110,13 +111,27 @@ export async function createTask(
 
 export async function updateTask(
   taskId: string,
-  updates: Partial<Pick<Task, 'title' | 'description' | 'priority' | 'impact_level' | 'effort_tokens' | 'due_date' | 'estimated_start_date' | 'assigned_to'>>,
+  updates: Partial<Pick<
+    Task,
+    | 'title' | 'description' | 'priority' | 'impact_level' | 'effort_tokens'
+    | 'due_date' | 'estimated_start_date' | 'assigned_to' | 'task_owner_id'
+  >>,
 ): Promise<{ error: string | null }> {
   const supabase = await createClient()
 
+  const role = await getCurrentUserRole()
+
+  const safeUpdates: typeof updates = { ...updates }
+
+  // Server-side guard: only leaders/admins can reassign execution or ownership
+  if (role === 'collaborator') {
+    delete safeUpdates.assigned_to
+    delete safeUpdates.task_owner_id
+  }
+
   const { error } = await supabase
     .from('tasks')
-    .update({ ...updates, updated_at: new Date().toISOString() })
+    .update({ ...safeUpdates, updated_at: new Date().toISOString() })
     .eq('id', taskId)
 
   if (error) return { error: error.message }
@@ -139,19 +154,35 @@ export async function deleteTask(taskId: string): Promise<{ error: string | null
   return { error: null }
 }
 
-export async function getTasks(): Promise<Task[]> {
+export async function getTasks(filters?: TaskFilters): Promise<Task[]> {
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return []
 
-  // RLS handles role-based scoping automatically:
-  // - collaborator: sees only tasks where assigned_to = uid OR user_id = uid
-  // - leader/admin_system: sees all tasks
-  const { data } = await supabase
-    .from('tasks')
-    .select('*')
-    .order('position')
+  let query = supabase.from('tasks').select('*')
 
-  return (data ?? []) as Task[]
+  // DB-level filters
+  if (filters?.execution_owner) query = query.eq('assigned_to', filters.execution_owner)
+  if (filters?.task_owner)      query = query.eq('task_owner_id', filters.task_owner)
+  if (filters?.created_by)      query = query.eq('user_id', filters.created_by)
+  if (filters?.priority)        query = query.eq('priority', filters.priority)
+  if (filters?.impact_level)    query = query.eq('impact_level', filters.impact_level)
+  if (filters?.min_tokens != null) query = query.gte('effort_tokens', filters.min_tokens)
+  if (filters?.max_tokens != null) query = query.lte('effort_tokens', filters.max_tokens)
+
+  if (filters?.overdue) {
+    const today = new Date().toISOString().split('T')[0]
+    query = query.lt('due_date', today).neq('status', 'done')
+  }
+
+  const { data } = await query.order('position')
+  const tasks = (data ?? []) as Task[]
+
+  // Client-level urgency filter (computed field — can't push to DB)
+  if (filters?.urgency) {
+    return tasks.filter((t) => getUrgency(t) === filters.urgency)
+  }
+
+  return tasks
 }
