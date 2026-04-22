@@ -20,13 +20,18 @@ import { revalidatePath } from 'next/cache'
 /** Creates a thenable Supabase query builder that resolves to `result`. */
 function makeQuery(result: unknown) {
   const q: Record<string, unknown> = {}
-  const methods = ['select', 'insert', 'update', 'eq', 'order', 'limit']
+  const methods = ['select', 'insert', 'update', 'eq', 'order', 'limit', 'single']
   methods.forEach((m) => {
     q[m] = vi.fn().mockReturnValue(q)
   })
   q['then'] = (resolve: (v: unknown) => unknown, reject?: (v: unknown) => unknown) =>
     Promise.resolve(result).then(resolve, reject)
   return q
+}
+
+/** Query that resolves as { data: { role: 'collaborator' }, error: null } — used to mock getCurrentUserRole. */
+function makeRoleQuery() {
+  return makeQuery({ data: { role: 'collaborator' }, error: null })
 }
 
 function makeTask(overrides: Partial<Task> = {}): Task {
@@ -124,7 +129,10 @@ describe('createTask', () => {
     const insertQuery = makeQuery({ data: null, error: null })
     const mockSupabase = {
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: mockUser } }) },
-      from: vi.fn().mockReturnValueOnce(positionQuery).mockReturnValueOnce(insertQuery),
+      from: vi.fn()
+        .mockReturnValueOnce(makeRoleQuery())   // getCurrentUserRole → profiles
+        .mockReturnValueOnce(positionQuery)
+        .mockReturnValueOnce(insertQuery),
     }
     vi.mocked(createClient).mockResolvedValue(mockSupabase as unknown as Awaited<ReturnType<typeof createClient>>)
 
@@ -142,7 +150,10 @@ describe('createTask', () => {
     const insertQuery = makeQuery({ data: null, error: null })
     const mockSupabase = {
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: mockUser } }) },
-      from: vi.fn().mockReturnValueOnce(positionQuery).mockReturnValueOnce(insertQuery),
+      from: vi.fn()
+        .mockReturnValueOnce(makeRoleQuery())   // getCurrentUserRole → profiles
+        .mockReturnValueOnce(positionQuery)
+        .mockReturnValueOnce(insertQuery),
     }
     vi.mocked(createClient).mockResolvedValue(mockSupabase as unknown as Awaited<ReturnType<typeof createClient>>)
 
@@ -162,7 +173,10 @@ describe('createTask', () => {
     })
     const mockSupabase = {
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: mockUser } }) },
-      from: vi.fn().mockReturnValueOnce(positionQuery).mockReturnValueOnce(insertQuery),
+      from: vi.fn()
+        .mockReturnValueOnce(makeRoleQuery())   // getCurrentUserRole → profiles
+        .mockReturnValueOnce(positionQuery)
+        .mockReturnValueOnce(insertQuery),
     }
     vi.mocked(createClient).mockResolvedValue(mockSupabase as unknown as Awaited<ReturnType<typeof createClient>>)
 
@@ -177,7 +191,10 @@ describe('createTask', () => {
     const insertQuery = makeQuery({ data: null, error: null })
     const mockSupabase = {
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: mockUser } }) },
-      from: vi.fn().mockReturnValueOnce(positionQuery).mockReturnValueOnce(insertQuery),
+      from: vi.fn()
+        .mockReturnValueOnce(makeRoleQuery())   // getCurrentUserRole → profiles
+        .mockReturnValueOnce(positionQuery)
+        .mockReturnValueOnce(insertQuery),
     }
     vi.mocked(createClient).mockResolvedValue(mockSupabase as unknown as Awaited<ReturnType<typeof createClient>>)
 
