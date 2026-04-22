@@ -12,6 +12,11 @@ export default async function DashboardLayout({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  // Ensure the profile row exists (handles existing users who signed up before the trigger)
+  await supabase
+    .from('profiles')
+    .upsert({ id: user.id }, { onConflict: 'id', ignoreDuplicates: true })
+
   const role = await getCurrentUserRole()
 
   return (
