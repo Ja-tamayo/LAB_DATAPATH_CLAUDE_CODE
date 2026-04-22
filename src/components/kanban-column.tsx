@@ -31,7 +31,8 @@ export function KanbanColumn({ id, label, tasks, onClickTask }: KanbanColumnProp
         <div
           ref={setNodeRef}
           className={cn(
-            'flex-1 min-h-48 rounded-lg border p-2 flex flex-col gap-1.5',
+            'rounded-lg border p-2 flex flex-col gap-1.5',
+            'h-[calc(100vh-160px)] overflow-y-auto',
             'transition-colors duration-200',
             isOver
               ? 'border-blue-500/50 bg-blue-500/5'

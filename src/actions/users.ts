@@ -12,6 +12,25 @@ export interface UserOption {
   weekly_capacity_tokens: number
 }
 
+export async function updateUserRole(targetUserId: string, newRole: UserRole): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  // Only admin_system can change roles
+  const { data: me } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (me?.role !== 'admin_system') return { error: 'Sin permisos' }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ role: newRole })
+    .eq('id', targetUserId)
+
+  if (error) return { error: error.message }
+  revalidatePath('/dashboard/people')
+  return { error: null }
+}
+
 export async function updateProfile(fullName: string): Promise<{ error: string | null }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
