@@ -61,7 +61,8 @@ type UserStats = {
 
 export default async function PeoplePage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data } = await supabase.auth.getUser()
+  const user = data?.user
   if (!user) redirect('/login')
 
   const [tasks, role, users] = await Promise.all([

@@ -16,7 +16,8 @@ export interface UserOption {
 
 async function assertAdminSystem(): Promise<{ error: string | null }> {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data } = await supabase.auth.getUser()
+  const user = data?.user
   if (!user) return { error: 'No autenticado' }
 
   const { data: me } = await supabase.from('profiles').select('role').eq('id', user.id).single()
@@ -169,7 +170,9 @@ export async function updateProfile(fullName: string): Promise<{ error: string |
 export async function getUsers(): Promise<UserOption[]> {
   const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data, error: userErr } = await supabase.auth.getUser()
+  if (userErr) console.error('[getUsers] getUser error:', userErr.message)
+  const user = data?.user
   if (!user) return []
 
   // Use cached role — avoids a second DB round-trip when called alongside getCurrentUserRole()

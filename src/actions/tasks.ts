@@ -8,18 +8,26 @@ import {
   type TaskFilters, getUrgency,
 } from '@/types/tasks'
 
+// Wrapped in try/catch because React cache() re-throws stored errors on every
+// subsequent call in the same request — one failure would crash every page.
 export const getCurrentUserRole = cache(async (): Promise<UserRole> => {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return 'collaborator'
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase.auth.getUser()
+    if (error) console.error('[getCurrentUserRole] getUser error:', error.message)
+    if (!data.user) return 'collaborator'
 
-  const { data } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', data.user.id)
+      .single()
 
-  return (data?.role as UserRole) ?? 'collaborator'
+    return (profile?.role as UserRole) ?? 'collaborator'
+  } catch (err) {
+    console.error('[getCurrentUserRole] threw:', err)
+    return 'collaborator'
+  }
 })
 
 export async function updateTaskStatus(taskId: string, newStatus: TaskStatus): Promise<void> {
@@ -171,8 +179,9 @@ export async function deleteTask(taskId: string): Promise<{ error: string | null
 export async function getTasks(filters?: TaskFilters): Promise<Task[]> {
   const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return []
+  const { data: authData, error: userErr } = await supabase.auth.getUser()
+  if (userErr) console.error('[getTasks] getUser error:', userErr.message)
+  if (!authData?.user) return []
 
   let query = supabase.from('tasks').select('*')
 
