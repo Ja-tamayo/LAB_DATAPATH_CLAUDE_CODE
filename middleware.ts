@@ -1,44 +1,24 @@
-import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request })
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          )
-          supabaseResponse = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-
-  const { data: { user } } = await supabase.auth.getUser()
+// Lightweight middleware — no Supabase client, no network calls.
+// Auth is validated properly inside each Server Component via createClient().
+// Here we only redirect unauthenticated cookie-less visitors so they don't
+// hit a blank page before the server component runs.
+export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Protege /dashboard — redirige a /login si no hay sesión
-  if (pathname.startsWith('/dashboard') && !user) {
+  // Supabase stores the session in one or more cookies prefixed with "sb-"
+  const hasSession = request.cookies.getAll().some(c => c.name.startsWith('sb-'))
+
+  if (pathname.startsWith('/dashboard') && !hasSession) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Si ya está autenticado y va a /login → redirige a /dashboard
-  if (pathname === '/login' && user) {
+  if (pathname === '/login' && hasSession) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  return supabaseResponse
+  return NextResponse.next()
 }
 
 export const config = {
