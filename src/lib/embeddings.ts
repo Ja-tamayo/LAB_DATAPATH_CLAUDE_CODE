@@ -9,6 +9,10 @@ async function callVoyage(
   inputs: string[],
   inputType: 'document' | 'query'
 ): Promise<number[][]> {
+  if (!process.env.VOYAGE_API_KEY) {
+    throw new Error('Voyage AI no está configurado: falta VOYAGE_API_KEY.')
+  }
+
   const response = await fetch(VOYAGE_API_URL, {
     method: 'POST',
     headers: {

@@ -1,23 +1,22 @@
 'use client'
 
-import { useState } from 'react'
-import { login, signup } from '@/actions/auth'
-import { cn } from '@/lib/utils'
+import { login } from '@/actions/auth'
+import { allowedEmailDomainsLabel } from '@/lib/allowed-email-domains'
 
 interface LoginFormProps {
   defaultTab?: string
   serverError?: string
+  serverMessage?: string
 }
 
-export function LoginForm({ defaultTab, serverError }: LoginFormProps) {
-  const [tab, setTab] = useState<'login' | 'signup'>(defaultTab === 'signup' ? 'signup' : 'login')
-  const isSignup = tab === 'signup'
+export function LoginForm({ defaultTab, serverError, serverMessage }: LoginFormProps) {
+  const cameFromSignup = defaultTab === 'signup'
+  const domainsLabel = allowedEmailDomainsLabel()
 
   return (
     <div className="w-full max-w-sm">
-      {/* Logo */}
-      <div className="flex items-center justify-center gap-3 mb-8">
-        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white font-bold text-sm">
+      <div className="mb-8 flex items-center justify-center gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 text-sm font-bold text-white">
           T
         </div>
         <span className="text-2xl font-semibold text-white">
@@ -25,55 +24,12 @@ export function LoginForm({ defaultTab, serverError }: LoginFormProps) {
         </span>
       </div>
 
-      {/* Card */}
-      <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-        {/* Tabs */}
-        <div className="flex gap-1 bg-white/5 rounded-lg p-1 mb-6">
-          <button
-            type="button"
-            onClick={() => setTab('login')}
-            className={cn(
-              'flex-1 py-1.5 text-sm font-medium rounded-md transition-colors',
-              !isSignup ? 'bg-white/10 text-white' : 'text-neutral-500 hover:text-neutral-300',
-            )}
-          >
-            Iniciar sesión
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('signup')}
-            className={cn(
-              'flex-1 py-1.5 text-sm font-medium rounded-md transition-colors',
-              isSignup ? 'bg-white/10 text-white' : 'text-neutral-500 hover:text-neutral-300',
-            )}
-          >
-            Crear cuenta
-          </button>
-        </div>
-
-        <form action={isSignup ? signup : login} className="flex flex-col gap-4">
-          {/* Name — signup only */}
-          {isSignup && (
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="full_name" className="text-sm text-neutral-400">
-                Nombre completo
-              </label>
-              <input
-                id="full_name"
-                name="full_name"
-                type="text"
-                autoComplete="name"
-                required
-                placeholder="José Ramírez"
-                className="bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-blue-500 transition-colors"
-              />
-            </div>
-          )}
-
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+        <form action={login} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <label htmlFor="email" className="text-sm text-neutral-400">
-              Correo electrónico
-              {isSignup && <span className="ml-1 text-[11px] text-neutral-600">(@qudox.io)</span>}
+              Correo electronico
+              <span className="ml-1 text-[11px] text-neutral-600">({domainsLabel})</span>
             </label>
             <input
               id="email"
@@ -81,38 +37,49 @@ export function LoginForm({ defaultTab, serverError }: LoginFormProps) {
               type="email"
               autoComplete="email"
               required
-              placeholder={isSignup ? 'nombre@qudox.io' : 'tu@qudox.io'}
-              className="bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-blue-500 transition-colors"
+              placeholder="tu@test1234.com"
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-neutral-600 transition-colors focus:border-blue-500 focus:outline-none"
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
             <label htmlFor="password" className="text-sm text-neutral-400">
-              Contraseña {isSignup && <span className="text-neutral-600">(mín. 6 caracteres)</span>}
+              Contrasena
             </label>
             <input
               id="password"
               name="password"
               type="password"
-              autoComplete={isSignup ? 'new-password' : 'current-password'}
+              autoComplete="current-password"
               required
-              minLength={isSignup ? 6 : undefined}
-              placeholder="••••••••"
-              className="bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-blue-500 transition-colors"
+              placeholder="********"
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-neutral-600 transition-colors focus:border-blue-500 focus:outline-none"
             />
           </div>
 
           {serverError && (
-            <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+            <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">
               {decodeURIComponent(serverError)}
+            </p>
+          )}
+
+          {serverMessage && (
+            <p className="rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-2 text-xs text-green-400">
+              {decodeURIComponent(serverMessage)}
+            </p>
+          )}
+
+          {cameFromSignup && (
+            <p className="rounded-lg border border-white/8 bg-white/[0.03] px-3 py-2 text-xs text-neutral-500">
+              Las cuentas se crean desde Personas por un administrador.
             </p>
           )}
 
           <button
             type="submit"
-            className="bg-blue-600 hover:bg-blue-500 transition-colors text-white font-medium text-sm py-2.5 rounded-lg mt-1"
+            className="mt-1 rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-500"
           >
-            {isSignup ? 'Crear cuenta' : 'Iniciar sesión'}
+            Iniciar sesion
           </button>
         </form>
       </div>

@@ -15,7 +15,7 @@ test.describe('Login page', () => {
   test('shows inline error message on invalid credentials', async ({ page }) => {
     await page.goto('/login')
 
-    await page.getByLabel('Correo electrónico').fill('wrong@example.com')
+    await page.getByLabel('Correo electrónico').fill('wrong@qudox.io')
     await page.getByLabel('Contraseña').fill('wrongpassword')
     await page.getByRole('button', { name: 'Iniciar sesión' }).click()
 

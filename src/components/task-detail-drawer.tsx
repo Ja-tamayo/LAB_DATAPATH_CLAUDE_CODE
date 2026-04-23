@@ -52,6 +52,15 @@ function ReadValue({ children }: { children: React.ReactNode }) {
   return <p className="text-xs text-neutral-300">{children}</p>
 }
 
+function formatLocalDate(dateStr: string): string {
+  const [datePart] = dateStr.split('T')
+  const parts = datePart.split('-').map(Number)
+  const date = parts.length === 3 && parts.every(Number.isFinite)
+    ? new Date(parts[0], parts[1] - 1, parts[2])
+    : new Date(dateStr)
+  return date.toLocaleDateString('es')
+}
+
 // ── User display helper ───────────────────────────────────────────────────────
 
 function UserBadge({ userId, users, label }: { userId: string | null; users: UserOption[]; label: string }) {
@@ -424,7 +433,7 @@ export function TaskDetailDrawer({
                 ) : (
                   <ReadValue>
                     {task.estimated_start_date
-                      ? new Date(task.estimated_start_date).toLocaleDateString('es')
+                      ? formatLocalDate(task.estimated_start_date)
                       : '—'}
                   </ReadValue>
                 )}
@@ -440,7 +449,7 @@ export function TaskDetailDrawer({
                   />
                 ) : (
                   <ReadValue>
-                    {task.due_date ? new Date(task.due_date).toLocaleDateString('es') : '—'}
+                    {task.due_date ? formatLocalDate(task.due_date) : '—'}
                   </ReadValue>
                 )}
               </Field>

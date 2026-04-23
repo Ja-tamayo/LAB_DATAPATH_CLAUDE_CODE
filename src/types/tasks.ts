@@ -31,6 +31,15 @@ export interface Task {
 export const tokensToMinutes = (tokens: number): number => tokens * 15
 export const tokensToHours   = (tokens: number): number => (tokens * 15) / 60
 
+function parseLocalDate(dateStr: string): Date {
+  const [datePart] = dateStr.split('T')
+  const parts = datePart.split('-').map(Number)
+  if (parts.length === 3 && parts.every(Number.isFinite)) {
+    return new Date(parts[0], parts[1] - 1, parts[2])
+  }
+  return new Date(dateStr)
+}
+
 // ── Urgency calculation ───────────────────────────────────────────────────────
 
 export function getUrgency(task: Task): UrgencyLevel {
@@ -38,7 +47,7 @@ export function getUrgency(task: Task): UrgencyLevel {
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const due = task.due_date ? new Date(task.due_date) : null
+  const due = task.due_date ? parseLocalDate(task.due_date) : null
   if (due) due.setHours(0, 0, 0, 0)
   const daysLeft = due ? Math.round((due.getTime() - today.getTime()) / 86_400_000) : null
 

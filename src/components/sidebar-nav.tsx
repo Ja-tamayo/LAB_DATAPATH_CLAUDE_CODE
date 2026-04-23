@@ -6,6 +6,7 @@ import { LayoutGrid, BarChart2, Users, Briefcase, LogOut, User } from 'lucide-re
 import { cn } from '@/lib/utils'
 import { logout } from '@/actions/auth'
 import { type UserRole, ROLE_CONFIG } from '@/types/tasks'
+import { ChangePasswordForm } from '@/components/change-password-form'
 
 interface SidebarNavProps {
   role: UserRole
@@ -29,7 +30,6 @@ const NAV_ITEMS: NavItem[] = [
     href:  '/dashboard/operational',
     label: 'Analítica',
     icon:  <BarChart2 className="w-4 h-4" />,
-    roles: ['leader', 'admin_system'],
   },
   {
     href:  '/dashboard/people',
@@ -103,6 +103,7 @@ export function SidebarNav({ role, userEmail }: SidebarNavProps) {
             </span>
           </div>
         </div>
+        <ChangePasswordForm />
         <form action={logout}>
           <button
             type="submit"

@@ -16,9 +16,37 @@ export interface ChatResponse {
   boardChanged: boolean
 }
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
+const CHAT_MODEL = 'claude-haiku-4-5-20251001'
+const MAX_CONTEXT_TASKS = 40
+const MAX_TOOL_TASKS = 80
+
+function getAnthropicClient() {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error('El asistente no está configurado: falta ANTHROPIC_API_KEY.')
+  }
+
+  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+}
+
+function sanitizeMessages(messages: ChatMessage[]): ChatMessage[] {
+  const lastUser = [...messages]
+    .reverse()
+    .filter((m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+    .map((m) => ({ role: m.role, content: m.content.trim().slice(0, 4_000) }))
+    .filter((m) => m.content.length > 0)
+    .find((m) => m.role === 'user')
+
+  return lastUser ? [lastUser] : []
+}
+
+function byUrgencyAndDate(a: Task, b: Task): number {
+  const order = { critical: 0, high: 1, medium: 2, low: 3 }
+  return (
+    order[getUrgency(a)] - order[getUrgency(b)] ||
+    (a.due_date ?? '9999-12-31').localeCompare(b.due_date ?? '9999-12-31') ||
+    a.position - b.position
+  )
+}
 
 const TOOLS: Anthropic.Tool[] = [
   {
@@ -66,8 +94,10 @@ function formatTask(task: Task, nameMap: Map<string, string>): string {
 }
 
 export async function chatWithTasks(messages: ChatMessage[]): Promise<ChatResponse> {
-  const lastUser = [...messages].reverse().find((m) => m.role === 'user')
+  const safeMessages = sanitizeMessages(messages)
+  const lastUser = [...safeMessages].reverse().find((m) => m.role === 'user')
   if (!lastUser) throw new Error('No hay mensaje del usuario')
+  const anthropic = getAnthropicClient()
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -100,7 +130,10 @@ export async function chatWithTasks(messages: ChatMessage[]): Promise<ChatRespon
   }
 
   const myTasks   = tasks.filter((t) => t.assigned_to === user.id || t.user_id === user.id)
-  const teamTasks = tasks.filter((t) => t.assigned_to !== user.id && t.user_id !== user.id)
+  const teamTasks = tasks
+    .filter((t) => t.assigned_to !== user.id && t.user_id !== user.id)
+    .sort(byUrgencyAndDate)
+    .slice(0, MAX_CONTEXT_TASKS)
 
   const byStatus = {
     todo:        tasks.filter((t) => t.status === 'todo'),
@@ -116,7 +149,16 @@ export async function chatWithTasks(messages: ChatMessage[]): Promise<ChatRespon
   const today = new Date().toISOString().split('T')[0]
   const overdue = tasks.filter((t) => t.status !== 'done' && t.due_date && t.due_date < today)
 
-  const taskListForTools = tasks
+  const activeContextTasks = tasks
+    .filter((t) => t.status !== 'done')
+    .sort(byUrgencyAndDate)
+    .slice(0, MAX_CONTEXT_TASKS)
+  const contextTasks = activeContextTasks.length > 0
+    ? activeContextTasks
+    : [...tasks].sort(byUrgencyAndDate).slice(0, MAX_CONTEXT_TASKS)
+  const toolTasks = [...tasks].sort(byUrgencyAndDate).slice(0, MAX_TOOL_TASKS)
+
+  const taskListForTools = toolTasks
     .map((t) => `ID: ${t.id} | "${t.title}" | ${t.status} | ${t.priority}${t.client ? ' | cliente: ' + t.client : ''}${t.project ? ' | proyecto: ' + t.project : ''}`)
     .join('\n')
 
@@ -130,10 +172,10 @@ export async function chatWithTasks(messages: ChatMessage[]): Promise<ChatRespon
     overdue.length > 0  ? `Tareas vencidas: ${overdue.length}` : '',
     '\n— MIS TAREAS —',
     byStatus.todo.length > 0
-      ? `Por hacer (${byStatus.todo.length}):\n${byStatus.todo.filter(t => t.assigned_to === user.id || t.user_id === user.id).map((t) => formatTask(t, nameMap)).join('\n')}`
+      ? `Por hacer (${byStatus.todo.length}):\n${contextTasks.filter(t => t.status === 'todo' && (t.assigned_to === user.id || t.user_id === user.id)).map((t) => formatTask(t, nameMap)).join('\n')}`
       : 'Por hacer: ninguna',
     byStatus.in_progress.length > 0
-      ? `En progreso (${byStatus.in_progress.filter(t => t.assigned_to === user.id || t.user_id === user.id).length}):\n${byStatus.in_progress.filter(t => t.assigned_to === user.id || t.user_id === user.id).map((t) => formatTask(t, nameMap)).join('\n')}`
+      ? `En progreso (${byStatus.in_progress.filter(t => t.assigned_to === user.id || t.user_id === user.id).length}):\n${contextTasks.filter(t => t.status === 'in_progress' && (t.assigned_to === user.id || t.user_id === user.id)).map((t) => formatTask(t, nameMap)).join('\n')}`
       : 'En progreso: ninguna',
     teamTasks.length > 0
       ? `\n— TAREAS DEL EQUIPO (${teamTasks.length}) —\n${teamTasks.filter(t => t.status !== 'done').map((t) => formatTask(t, nameMap)).join('\n')}`
@@ -155,13 +197,13 @@ Prioridad por defecto: medium. Si el usuario menciona un cliente o proyecto cono
 Contexto del equipo:
 ${fullContext}`
 
-  const apiMessages: Anthropic.MessageParam[] = messages.map((m) => ({
+  const apiMessages: Anthropic.MessageParam[] = safeMessages.map((m) => ({
     role: m.role,
     content: m.content,
   }))
 
   const response = await anthropic.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+    model: CHAT_MODEL,
     max_tokens: 1024,
     system: systemPrompt,
     tools: TOOLS,
@@ -200,6 +242,10 @@ ${fullContext}`
     if (block.name === 'move_task') {
       const input = block.input as { task_id: string; to_status: TaskStatus }
       try {
+        const visibleTask = tasks.find((t) => t.id === input.task_id)
+        if (!visibleTask) {
+          throw new Error('No encontré esa tarea entre las tareas visibles. Pide el título exacto o confirma cuál tarea querés mover.')
+        }
         await updateTaskStatus(input.task_id, input.to_status)
         console.log('[chat] move_task ok:', input.task_id, '→', input.to_status)
         toolResults.push({
@@ -221,7 +267,7 @@ ${fullContext}`
 
   // Segunda llamada con resultados de herramientas
   const followUp = await anthropic.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+    model: CHAT_MODEL,
     max_tokens: 1024,
     system: systemPrompt,
     tools: TOOLS,

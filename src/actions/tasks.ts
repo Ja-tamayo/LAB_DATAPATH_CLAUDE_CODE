@@ -69,6 +69,10 @@ export async function createTask(
   taskOwnerId?: string,
   client?: string,
   project?: string,
+  impactLevel?: Task['impact_level'],
+  effortTokens?: number | null,
+  dueDate?: string | null,
+  estimatedStartDate?: string | null,
 ): Promise<{ error: string | null }> {
   const supabase = await createClient()
 
@@ -100,6 +104,10 @@ export async function createTask(
     priority,
     status:        'todo',
     position,
+    impact_level:  impactLevel ?? null,
+    effort_tokens: effortTokens ?? null,
+    due_date:      dueDate ?? null,
+    estimated_start_date: estimatedStartDate ?? null,
     client:        client ?? null,
     project:       project ?? null,
   })

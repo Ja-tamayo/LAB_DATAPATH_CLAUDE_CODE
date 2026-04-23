@@ -32,6 +32,7 @@ export function NewTaskDialog({ role = 'collaborator', users = [], clients = [],
   const [description, setDescription] = useState('')
   const [tokens, setTokens]           = useState('')
   const [dueDate, setDueDate]         = useState('')
+  const [estStart, setEstStart]       = useState('')
   const [assignedTo, setAssignedTo]   = useState<string>(currentUserId ?? '')
   const [taskOwner, setTaskOwner]     = useState<string>(currentUserId ?? '')
   const [client, setClient]           = useState('')
@@ -43,7 +44,7 @@ export function NewTaskDialog({ role = 'collaborator', users = [], clients = [],
 
   function reset() {
     setTitle(''); setPriority('medium'); setImpact(''); setDescription('')
-    setTokens(''); setDueDate(''); setClient(''); setProject('')
+    setTokens(''); setDueDate(''); setEstStart(''); setClient(''); setProject('')
     setAssignedTo(currentUserId ?? '')
     setTaskOwner(currentUserId ?? '')
     setError(null)
@@ -67,6 +68,10 @@ export function NewTaskDialog({ role = 'collaborator', users = [], clients = [],
         canAssign ? taskOwner  || undefined : undefined,
         client.trim() || undefined,
         project.trim() || undefined,
+        impact || null,
+        tokens ? parseInt(tokens, 10) : null,
+        dueDate || null,
+        estStart || null,
       )
       if (result.error) {
         setError(result.error)
@@ -145,8 +150,8 @@ export function NewTaskDialog({ role = 'collaborator', users = [], clients = [],
             </div>
           </div>
 
-          {/* Tokens + Due date */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Tokens + dates */}
+          <div className="grid grid-cols-3 gap-3">
             <div className="flex flex-col gap-1">
               <label className="text-[10px] text-neutral-400 uppercase tracking-wider">Tokens (1=15min)</label>
               <Input
@@ -156,6 +161,15 @@ export function NewTaskDialog({ role = 'collaborator', users = [], clients = [],
                 value={tokens}
                 onChange={e => setTokens(e.target.value)}
                 className="bg-white/5 border-white/10 text-white placeholder:text-neutral-500 text-xs h-8"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] text-neutral-400 uppercase tracking-wider">Inicio estimado</label>
+              <Input
+                type="date"
+                value={estStart}
+                onChange={e => setEstStart(e.target.value)}
+                className="bg-white/5 border-white/10 text-white text-xs h-8"
               />
             </div>
             <div className="flex flex-col gap-1">

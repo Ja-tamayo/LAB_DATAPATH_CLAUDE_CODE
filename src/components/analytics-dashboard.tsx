@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { AlertCircle, AlertTriangle, User, ChevronDown, ChevronRight } from 'lucide-react'
+import { AlertCircle, AlertTriangle, User, ChevronDown, ChevronRight, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   type Task, type UrgencyLevel,
@@ -15,6 +15,8 @@ import { type ClientOption } from '@/actions/clients'
 
 type TabId     = 'my_load' | 'team' | 'clients' | 'risks'
 type PeriodKey = 'week' | 'month' | '30d' | 'quarter' | 'year' | 'all' | 'custom'
+type DateFilterField = 'estimated_start_date' | 'due_date'
+type StatusFilter = 'all' | 'active' | 'todo' | 'in_progress' | 'done'
 
 export interface AnalyticsDashboardProps {
   tasks:               Task[]
@@ -33,8 +35,21 @@ const PERIODS: { key: PeriodKey; label: string }[] = [
   { key: '30d',     label: 'Últ. 30d'   },
   { key: 'quarter', label: 'Trimestre'   },
   { key: 'year',    label: 'Este año'    },
-  { key: 'all',     label: 'Todo'        },
+  { key: 'all',     label: 'Sin filtro de fecha' },
   { key: 'custom',  label: 'Personalizado' },
+]
+
+const DATE_FILTER_FIELDS: { key: DateFilterField; label: string }[] = [
+  { key: 'estimated_start_date', label: 'Inicio estimado' },
+  { key: 'due_date',             label: 'Fecha límite' },
+]
+
+const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
+  { key: 'all',         label: 'Todos los estados' },
+  { key: 'active',      label: 'Activas' },
+  { key: 'todo',        label: 'Por hacer' },
+  { key: 'in_progress', label: 'En progreso' },
+  { key: 'done',        label: 'Completadas' },
 ]
 
 function getPeriodStart(p: PeriodKey, customFrom?: string): Date | null {
@@ -48,29 +63,76 @@ function getPeriodStart(p: PeriodKey, customFrom?: string): Date | null {
   return new Date(n.getFullYear(), 0, 1)
 }
 
+function getPeriodEnd(p: PeriodKey, customTo?: string): Date | null {
+  if (p === 'all') return null
+  if (p === 'custom') return customTo ? new Date(customTo + 'T23:59:59') : null
+  const n = new Date()
+  if (p === 'week')    { const d = getPeriodStart('week')!; d.setDate(d.getDate()+6); d.setHours(23,59,59,999); return d }
+  if (p === 'month')   return new Date(n.getFullYear(), n.getMonth()+1, 0, 23, 59, 59, 999)
+  if (p === '30d')     { const d = new Date(n); d.setHours(23,59,59,999); return d }
+  if (p === 'quarter') return new Date(n.getFullYear(), Math.floor(n.getMonth()/3)*3 + 3, 0, 23, 59, 59, 999)
+  return new Date(n.getFullYear(), 11, 31, 23, 59, 59, 999)
+}
+
+function parseLocalDate(dateStr: string | null | undefined): Date | null {
+  if (!dateStr) return null
+  const [datePart] = dateStr.split('T')
+  const parts = datePart.split('-').map(Number)
+  if (parts.length === 3 && parts.every(Number.isFinite)) {
+    return new Date(parts[0], parts[1] - 1, parts[2])
+  }
+  const parsed = new Date(dateStr)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function toDateKey(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+function daysBetween(a: Date, b: string | null | undefined): number | null {
+  const target = parseLocalDate(b)
+  if (!target) return null
+  const base = new Date(a)
+  base.setHours(0, 0, 0, 0)
+  target.setHours(0, 0, 0, 0)
+  return Math.round((target.getTime() - base.getTime()) / 86_400_000)
+}
+
 function inPeriod(dateStr: string | null | undefined, ps: Date | null, pe?: Date | null): boolean {
-  if (!dateStr) return false
-  const d = new Date(dateStr)
+  const d = parseLocalDate(dateStr)
+  if (!d) return false
   if (ps && d < ps) return false
   if (pe && d > pe) return false
   return true
 }
 
-// Active task relevance: always show overdue + tasks due within period + no-due-date tasks
-// Done tasks: only if completed_at falls in the period
-function inOrBeforePeriod(task: Task, ps: Date | null, pe: Date | null): boolean {
-  if (!ps && !pe) return true
-  if (task.status === 'done') return inPeriod(task.completed_at, ps, pe)
-  if (!task.due_date) return true          // floating tasks always visible
-  const due = new Date(task.due_date)
-  if (ps && due < ps) return true          // overdue — always keep visible
-  if (pe && due > pe) return false         // due after period end — hide
-  return true
+function getExecutionOwnerId(task: Task): string {
+  return task.assigned_to ?? task.user_id
+}
+
+function getPlanningDate(task: Task): string | null {
+  return task.estimated_start_date ?? null
+}
+
+function startOfWeek(date: Date): Date {
+  const d = new Date(date)
+  d.setHours(0, 0, 0, 0)
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+  return d
 }
 
 // ── UI atoms ──────────────────────────────────────────────────────────────────
 
-function Divider() { return <span className="w-px h-6 bg-white/8 shrink-0" /> }
+function matchesStatus(task: Task, status: StatusFilter): boolean {
+  if (status === 'all') return true
+  if (status === 'active') return task.status !== 'done'
+  return task.status === status
+}
+
+function Divider() { return <span className="w-px h-8 bg-white/8 shrink-0 self-center" /> }
 
 function StatCell({ label, value, sub, accent = 'white' }: {
   label: string; value: string | number; sub?: string
@@ -78,10 +140,10 @@ function StatCell({ label, value, sub, accent = 'white' }: {
 }) {
   const colors = { white: 'text-white', green: 'text-green-400', yellow: 'text-yellow-400', red: 'text-red-400', orange: 'text-orange-400', blue: 'text-blue-400' }
   return (
-    <div>
-      <p className="text-xs text-neutral-500 uppercase tracking-widest mb-0.5">{label}</p>
+    <div className="min-w-[96px]">
+      <p className="text-xs text-neutral-500 uppercase tracking-widest mb-1">{label}</p>
       <p className={cn('text-xl font-bold tabular-nums leading-none', colors[accent])}>{value}</p>
-      {sub && <p className="text-xs text-neutral-500 mt-0.5">{sub}</p>}
+      {sub && <p className="text-xs text-neutral-500 mt-1">{sub}</p>}
     </div>
   )
 }
@@ -149,49 +211,96 @@ function DonutRing({ segments, total }: { segments: { color: string; value: numb
 
 export function AnalyticsDashboard({ tasks, users, registeredClients = [], currentUserId, currentUserCapacity, isPrivileged }: AnalyticsDashboardProps) {
   const [activeTab,       setActiveTab]       = useState<TabId>('my_load')
-  const [period,          setPeriod]          = useState<PeriodKey>('all')
+  const [period,          setPeriod]          = useState<PeriodKey>('week')
   const [customFrom,      setCustomFrom]      = useState('')
   const [customTo,        setCustomTo]        = useState('')
+  const [dateField,       setDateField]       = useState<DateFilterField>('estimated_start_date')
+  const [statusFilter,    setStatusFilter]    = useState<StatusFilter>('active')
+  const [selectedClient,  setSelectedClient]  = useState<string>('all')
   const [selectedUser,    setSelectedUser]    = useState<string>('all')
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set())
 
   const now      = useMemo(() => new Date(), [])
-  const todayStr = useMemo(() => now.toISOString().split('T')[0], [now])
+  const todayStr = useMemo(() => toDateKey(now), [now])
   const ps       = useMemo(() => getPeriodStart(period, customFrom), [period, customFrom])
-  const pe       = useMemo(() => {
-    if (period === 'all') return null
-    if (period === 'custom') return customTo ? new Date(customTo + 'T23:59:59') : null
-    // For standard periods: no upper bound (show everything from ps up to and including future due dates)
-    return null
-  }, [period, customTo])
+  const pe       = useMemo(() => getPeriodEnd(period, customTo), [period, customTo])
   const periodLabel = period === 'custom'
     ? (customFrom || customTo) ? `${customFrom || '…'} → ${customTo || '…'}` : 'Rango personalizado'
     : PERIODS.find(p => p.key === period)?.label
+  const dateLabel = period === 'all'
+    ? 'Sin filtro'
+    : DATE_FILTER_FIELDS.find(f => f.key === dateField)?.label ?? 'Fecha'
+  const clientOptions = useMemo(() => {
+    const names = new Set<string>()
+    registeredClients.filter(c => c.status === 'active').forEach(c => names.add(c.name))
+    tasks.forEach(t => { if (t.client) names.add(t.client) })
+    return [...names].sort((a, b) => a.localeCompare(b))
+  }, [registeredClients, tasks])
+  const visibleRegisteredClients = useMemo(() =>
+    selectedClient === 'all'
+      ? registeredClients
+      : registeredClients.filter(c => c.name === selectedClient),
+  [registeredClients, selectedClient])
+  const hasActiveFilters =
+    period !== 'week' ||
+    customFrom !== '' ||
+    customTo !== '' ||
+    dateField !== 'estimated_start_date' ||
+    statusFilter !== 'active' ||
+    selectedClient !== 'all' ||
+    selectedUser !== 'all'
+
+  function resetFilters() {
+    setPeriod('week')
+    setCustomFrom('')
+    setCustomTo('')
+    setDateField('estimated_start_date')
+    setStatusFilter('active')
+    setSelectedClient('all')
+    setSelectedUser('all')
+  }
 
   // ── Scoped tasks (user filter) ─────────────────────────────────────────────
 
   const scopedTasks = useMemo(() =>
-    selectedUser === 'all' ? tasks
-      : tasks.filter(t => t.assigned_to === selectedUser || t.task_owner_id === selectedUser || t.user_id === selectedUser),
-  [tasks, selectedUser])
+    tasks.filter(t => {
+      const matchesUser = selectedUser === 'all' || getExecutionOwnerId(t) === selectedUser
+      const matchesClient = selectedClient === 'all' || t.client === selectedClient
+      return matchesUser && matchesClient
+    }),
+  [tasks, selectedUser, selectedClient])
 
-  // Period-filtered slice used by Team + Clients tabs (active tasks pruned by due_date)
+  const statusScopedTasks = useMemo(() =>
+    scopedTasks.filter(t => matchesStatus(t, statusFilter)),
+  [scopedTasks, statusFilter])
+
   const periodTasks = useMemo(() =>
-    (!ps && !pe) ? scopedTasks : scopedTasks.filter(t => inOrBeforePeriod(t, ps, pe)),
-  [scopedTasks, ps, pe])
+    (!ps && !pe) ? statusScopedTasks : statusScopedTasks.filter(t => inPeriod(t[dateField], ps, pe)),
+  [statusScopedTasks, ps, pe, dateField])
+
+  const periodMetricTasks = useMemo(() => {
+    const periodScoped = (!ps && !pe) ? scopedTasks : scopedTasks.filter(t => inPeriod(t[dateField], ps, pe))
+    return statusFilter === 'active' ? periodScoped : periodTasks
+  }, [scopedTasks, periodTasks, ps, pe, dateField, statusFilter])
 
   // ── MY LOAD ────────────────────────────────────────────────────────────────
 
-  // Active tasks always show in full (never hide overdue tasks from your own queue)
-  const myTasks   = useMemo(() => tasks.filter(t => t.assigned_to === currentUserId || t.task_owner_id === currentUserId || t.user_id === currentUserId), [tasks, currentUserId])
+  const loadUserId = selectedUser === 'all' ? currentUserId : selectedUser
+  const loadCapacity = selectedUser === 'all'
+    ? currentUserCapacity
+    : users.find(u => u.id === selectedUser)?.weekly_capacity_tokens ?? currentUserCapacity
+
+  // Active tasks follow the same period/user scope as the global filter bar.
+  const myTasks   = useMemo(() => periodMetricTasks.filter(t => getExecutionOwnerId(t) === loadUserId), [periodMetricTasks, loadUserId])
   const myActive  = useMemo(() => myTasks.filter(t => t.status !== 'done'), [myTasks])
   const myIP      = useMemo(() => myTasks.filter(t => t.status === 'in_progress'), [myTasks])
   const myDone    = useMemo(() => myTasks.filter(t => t.status === 'done' && inPeriod(t.completed_at, ps, pe)), [myTasks, ps, pe])
   const myOverdue = useMemo(() => myActive.filter(t => t.due_date && t.due_date < todayStr), [myActive, todayStr])
 
+  const myTokensPlanned = useMemo(() => myActive.reduce((s, t) => s + (t.effort_tokens ?? 0), 0), [myActive])
   const myTokensIP   = useMemo(() => myIP.reduce((s, t) => s + (t.effort_tokens ?? 0), 0), [myIP])
   const myTokensDone = useMemo(() => myDone.reduce((s, t) => s + (t.effort_tokens ?? 0), 0), [myDone])
-  const myCapPct     = currentUserCapacity > 0 ? Math.min(Math.round((myTokensIP / currentUserCapacity) * 100), 200) : 0
+  const myCapPct     = loadCapacity > 0 ? Math.min(Math.round((myTokensPlanned / loadCapacity) * 100), 200) : 0
 
   const myUrgency = useMemo(() => {
     const u = { critical: 0, high: 0, medium: 0, low: 0 }
@@ -203,13 +312,23 @@ export function AnalyticsDashboard({ tasks, users, registeredClients = [], curre
   const myTopTasks = useMemo(() =>
     [...myActive].sort((a, b) => URGENCY_ORDER[getUrgency(a)] - URGENCY_ORDER[getUrgency(b)] || (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999')).slice(0, 8),
   [myActive])
+  const delegatedTasks = useMemo(() =>
+    [...periodTasks]
+      .filter(t => t.task_owner_id === loadUserId && getExecutionOwnerId(t) !== loadUserId)
+      .sort((a, b) =>
+        URGENCY_ORDER[getUrgency(a)] - URGENCY_ORDER[getUrgency(b)] ||
+        (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999'),
+      ),
+  [periodTasks, loadUserId])
+  const delegatedActive = useMemo(() => delegatedTasks.filter(t => t.status !== 'done'), [delegatedTasks])
+  const delegatedOverdue = useMemo(() => delegatedActive.filter(t => t.due_date && t.due_date < todayStr), [delegatedActive, todayStr])
 
   const noDate   = useMemo(() => myActive.filter(t => !t.due_date).length, [myActive])
   const noTokens = useMemo(() => myActive.filter(t => !t.effort_tokens).length, [myActive])
 
   // ── TEAM (period-filtered) ──────────────────────────────────────────────────
 
-  const teamTasks  = periodTasks
+  const teamTasks  = periodMetricTasks
   const teamActive = useMemo(() => teamTasks.filter(t => t.status !== 'done'), [teamTasks])
 
   const statusDist = useMemo(() => ({
@@ -226,17 +345,18 @@ export function AnalyticsDashboard({ tasks, users, registeredClients = [], curre
 
   const teamDoneInPeriod = useMemo(() => teamTasks.filter(t => t.status === 'done').length, [teamTasks])
 
-  type UserLoad = { userId: string; activeTasks: number; inProgress: number; tokensIP: number; tokensDone: number; capacity: number; overdue: number }
+  type UserLoad = { userId: string; activeTasks: number; inProgress: number; tokensPlanned: number; tokensDone: number; capacity: number; overdue: number }
   const workload = useMemo(() => {
     const map = new Map<string, UserLoad>()
-    for (const u of users) map.set(u.id, { userId: u.id, activeTasks: 0, inProgress: 0, tokensIP: 0, tokensDone: 0, capacity: u.weekly_capacity_tokens, overdue: 0 })
+    for (const u of users) map.set(u.id, { userId: u.id, activeTasks: 0, inProgress: 0, tokensPlanned: 0, tokensDone: 0, capacity: u.weekly_capacity_tokens, overdue: 0 })
     for (const t of teamTasks) {
-      const uid = t.assigned_to ?? t.user_id
-      if (!map.has(uid)) map.set(uid, { userId: uid, activeTasks: 0, inProgress: 0, tokensIP: 0, tokensDone: 0, capacity: 40, overdue: 0 })
+      const uid = getExecutionOwnerId(t)
+      if (!map.has(uid)) map.set(uid, { userId: uid, activeTasks: 0, inProgress: 0, tokensPlanned: 0, tokensDone: 0, capacity: 40, overdue: 0 })
       const e = map.get(uid)!
       if (t.status !== 'done') {
         e.activeTasks++
-        if (t.status === 'in_progress') { e.inProgress++; e.tokensIP += t.effort_tokens ?? 0 }
+        e.tokensPlanned += t.effort_tokens ?? 0
+        if (t.status === 'in_progress') e.inProgress++
         if (t.due_date && t.due_date < todayStr) e.overdue++
       } else {
         e.tokensDone += t.effort_tokens ?? 0
@@ -245,7 +365,73 @@ export function AnalyticsDashboard({ tasks, users, registeredClients = [], curre
     return [...map.values()].sort((a, b) => b.activeTasks - a.activeTasks)
   }, [teamTasks, users, todayStr])
 
-  const overloadedN = useMemo(() => workload.filter(w => w.capacity > 0 && w.tokensIP > w.capacity).length, [workload])
+  const overloadedN = useMemo(() => workload.filter(w => w.capacity > 0 && w.tokensPlanned > w.capacity).length, [workload])
+
+  type ForecastRow = { label: string; tokens: number; capacity: number; pct: number; tasks: number; taskItems: Task[] }
+
+  const myWeeklyForecast = useMemo<ForecastRow[]>(() => {
+    const base = startOfWeek(now)
+    const activeMine = scopedTasks.filter(t => t.status !== 'done' && getExecutionOwnerId(t) === loadUserId)
+    return Array.from({ length: 4 }, (_, idx) => {
+      const ws = new Date(base)
+      ws.setDate(base.getDate() + idx * 7)
+      const we = new Date(ws)
+      we.setDate(ws.getDate() + 6)
+      we.setHours(23, 59, 59, 999)
+      const bucket = activeMine.filter(t => inPeriod(getPlanningDate(t), ws, we))
+      const tokens = bucket.reduce((sum, t) => sum + (t.effort_tokens ?? 0), 0)
+      const pct = loadCapacity > 0 ? Math.round((tokens / loadCapacity) * 100) : 0
+      return {
+        label: idx === 0 ? 'Esta semana' : idx === 1 ? 'Próx. semana' : `${toDateKey(ws).slice(5)} → ${toDateKey(we).slice(5)}`,
+        tokens,
+        capacity: loadCapacity,
+        pct,
+        tasks: bucket.length,
+        taskItems: bucket,
+      }
+    })
+  }, [now, scopedTasks, loadUserId, loadCapacity])
+
+  const teamWeeklyForecast = useMemo<ForecastRow[]>(() => {
+    const base = startOfWeek(now)
+    const activeTeam = scopedTasks.filter(t => t.status !== 'done')
+    const scopedUserIds = selectedUser === 'all'
+      ? new Set(activeTeam.map(t => getExecutionOwnerId(t)))
+      : new Set([selectedUser])
+
+    const capacity = users
+      .filter(u => scopedUserIds.has(u.id))
+      .reduce((sum, u) => sum + u.weekly_capacity_tokens, 0)
+
+    return Array.from({ length: 4 }, (_, idx) => {
+      const ws = new Date(base)
+      ws.setDate(base.getDate() + idx * 7)
+      const we = new Date(ws)
+      we.setDate(ws.getDate() + 6)
+      we.setHours(23, 59, 59, 999)
+      const bucket = activeTeam.filter(t => inPeriod(getPlanningDate(t), ws, we))
+      const tokens = bucket.reduce((sum, t) => sum + (t.effort_tokens ?? 0), 0)
+      const pct = capacity > 0 ? Math.round((tokens / capacity) * 100) : 0
+      return {
+        label: idx === 0 ? 'Esta semana' : idx === 1 ? 'Próx. semana' : `${toDateKey(ws).slice(5)} → ${toDateKey(we).slice(5)}`,
+        tokens,
+        capacity,
+        pct,
+        tasks: bucket.length,
+        taskItems: bucket,
+      }
+    })
+  }, [now, scopedTasks, selectedUser, users])
+
+  const unplannedActiveTokens = useMemo(() =>
+    scopedTasks
+      .filter(t => t.status !== 'done' && !getPlanningDate(t))
+      .reduce((sum, t) => sum + (t.effort_tokens ?? 0), 0),
+  [scopedTasks])
+
+  const unplannedActiveCount = useMemo(() =>
+    scopedTasks.filter(t => t.status !== 'done' && !getPlanningDate(t)).length,
+  [scopedTasks])
 
   // ── CLIENTS / PROJECTS ─────────────────────────────────────────────────────
 
@@ -256,11 +442,11 @@ export function AnalyticsDashboard({ tasks, users, registeredClients = [], curre
     const clientMap = new Map<string, Task[]>()
 
     // Seed with registered active clients so they always appear even with 0 tasks
-    for (const rc of registeredClients) {
+    for (const rc of visibleRegisteredClients) {
       if (rc.status === 'active') clientMap.set(rc.name, [])
     }
 
-    for (const t of periodTasks) {
+    for (const t of periodMetricTasks) {
       const key = t.client ?? '§'
       if (!clientMap.has(key)) clientMap.set(key, [])
       clientMap.get(key)!.push(t)
@@ -271,7 +457,7 @@ export function AnalyticsDashboard({ tasks, users, registeredClients = [], curre
         const projectMap = new Map<string, Task[]>()
 
         // Seed with registered projects for this client
-        const regClient = registeredClients.find(rc => rc.name === clientKey)
+        const regClient = visibleRegisteredClients.find(rc => rc.name === clientKey)
         for (const rp of (regClient?.projects ?? [])) {
           if (rp.status === 'active') projectMap.set(rp.name, [])
         }
@@ -311,24 +497,24 @@ export function AnalyticsDashboard({ tasks, users, registeredClients = [], curre
         if (b.client === '(Sin cliente)') return -1
         return (b.estimTokens + b.doneTokens) - (a.estimTokens + a.doneTokens)
       })
-  }, [periodTasks, registeredClients, todayStr])
+  }, [periodMetricTasks, visibleRegisteredClients, todayStr])
 
   // ── RISKS ──────────────────────────────────────────────────────────────────
 
   const overdueAll = useMemo(() =>
-    scopedTasks.filter(t => t.status !== 'done' && t.due_date && t.due_date < todayStr)
+    periodTasks.filter(t => t.status !== 'done' && t.due_date && t.due_date < todayStr)
       .sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? '')),
-  [scopedTasks, todayStr])
+  [periodTasks, todayStr])
 
-  const unassigned = useMemo(() => scopedTasks.filter(t => t.status !== 'done' && !t.assigned_to), [scopedTasks])
+  const unassigned = useMemo(() => periodTasks.filter(t => t.status !== 'done' && !t.assigned_to), [periodTasks])
 
   const highRisk = useMemo(() =>
-    scopedTasks.filter(t => {
+    periodTasks.filter(t => {
       if (t.status === 'done' || !t.due_date) return false
-      const d = Math.round((new Date(t.due_date).getTime() - now.getTime()) / 86_400_000)
-      return d >= 0 && d <= 3 && (t.effort_tokens ?? 0) > 8
+      const d = daysBetween(now, t.due_date)
+      return d !== null && d >= 0 && d <= 3 && (t.effort_tokens ?? 0) > 8
     }),
-  [scopedTasks, now])
+  [periodTasks, now])
 
   const riskScore = useMemo(() => Math.min(100,
     overdueAll.length * 15 +
@@ -365,18 +551,31 @@ export function AnalyticsDashboard({ tasks, users, registeredClients = [], curre
 
       {/* Global filter bar */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-white/5 shrink-0 flex-wrap gap-y-2">
-        <div className="flex items-center gap-0.5 bg-white/[0.03] rounded-lg p-0.5 flex-wrap">
+        <select value={period} onChange={e => {
+          const next = e.target.value as PeriodKey
+          setPeriod(next)
+          if (next !== 'custom') {
+            setCustomFrom('')
+            setCustomTo('')
+          }
+        }}
+          className="min-w-[150px] max-w-full bg-white/[0.03] border border-white/8 rounded-lg px-2.5 py-1 text-xs text-neutral-300 focus:outline-none focus:border-blue-500/50 cursor-pointer [&>option]:bg-[#1a1a2e]">
           {PERIODS.map(p => (
-            <button key={p.key} onClick={() => setPeriod(p.key)}
-              className={cn('px-2.5 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap',
-                period === p.key ? 'bg-white/10 text-white' : 'text-neutral-500 hover:text-neutral-300')}>
-              {p.label}
-            </button>
+            <option key={p.key} value={p.key}>Periodo: {p.label}</option>
           ))}
-        </div>
+        </select>
+
+        {period !== 'all' && (
+          <select value={dateField} onChange={e => setDateField(e.target.value as DateFilterField)}
+            className="min-w-[130px] max-w-full bg-white/[0.03] border border-white/8 rounded-lg px-2.5 py-1 text-xs text-neutral-300 focus:outline-none focus:border-blue-500/50 cursor-pointer [&>option]:bg-[#1a1a2e]">
+            {DATE_FILTER_FIELDS.map(f => (
+              <option key={f.key} value={f.key}>{f.label}</option>
+            ))}
+          </select>
+        )}
 
         {period === 'custom' && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <input
               type="date"
               value={customFrom}
@@ -393,9 +592,24 @@ export function AnalyticsDashboard({ tasks, users, registeredClients = [], curre
           </div>
         )}
 
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as StatusFilter)}
+          className="min-w-[130px] max-w-full bg-white/[0.03] border border-white/8 rounded-lg px-2.5 py-1 text-xs text-neutral-300 focus:outline-none focus:border-blue-500/50 cursor-pointer [&>option]:bg-[#1a1a2e]">
+          {STATUS_FILTERS.map(s => (
+            <option key={s.key} value={s.key}>{s.label}</option>
+          ))}
+        </select>
+
+        <select value={selectedClient} onChange={e => setSelectedClient(e.target.value)}
+          className="min-w-[145px] max-w-full bg-white/[0.03] border border-white/8 rounded-lg px-2.5 py-1 text-xs text-neutral-300 focus:outline-none focus:border-blue-500/50 cursor-pointer [&>option]:bg-[#1a1a2e]">
+          <option value="all">Todos los clientes</option>
+          {clientOptions.map(client => (
+            <option key={client} value={client}>{client}</option>
+          ))}
+        </select>
+
         {isPrivileged && (
           <select value={selectedUser} onChange={e => setSelectedUser(e.target.value)}
-            className="bg-white/[0.03] border border-white/8 rounded-lg px-2.5 py-1 text-xs text-neutral-300 focus:outline-none focus:border-blue-500/50 cursor-pointer [&>option]:bg-[#1a1a2e]">
+            className="min-w-[145px] max-w-full bg-white/[0.03] border border-white/8 rounded-lg px-2.5 py-1 text-xs text-neutral-300 focus:outline-none focus:border-blue-500/50 cursor-pointer [&>option]:bg-[#1a1a2e]">
             <option value="all">Todos los usuarios</option>
             {users.map(u => (
               <option key={u.id} value={u.id}>{u.full_name ?? u.id.slice(0, 8)}{u.id === currentUserId ? ' (yo)' : ''}</option>
@@ -403,12 +617,28 @@ export function AnalyticsDashboard({ tasks, users, registeredClients = [], curre
           </select>
         )}
 
-        <span className="text-xs text-neutral-600 ml-auto tabular-nums">
-          {periodTasks.length}
-          {periodTasks.length !== scopedTasks.length && (
-            <span className="text-neutral-700"> / {scopedTasks.length}</span>
+        <button
+          type="button"
+          onClick={resetFilters}
+          disabled={!hasActiveFilters}
+          title="Reiniciar filtros"
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition-colors',
+            hasActiveFilters
+              ? 'border-white/10 text-neutral-300 hover:border-white/20 hover:text-white'
+              : 'border-white/5 text-neutral-700 cursor-not-allowed',
           )}
-          {' '}tarea{periodTasks.length !== 1 ? 's' : ''}
+        >
+          <RotateCcw className="w-3.5 h-3.5" />
+          Reiniciar
+        </button>
+
+        <span className="text-xs text-neutral-600 sm:ml-auto tabular-nums basis-full sm:basis-auto text-right">
+          {periodTasks.length}
+          {periodTasks.length !== tasks.length && (
+            <span className="text-neutral-700"> / {tasks.length}</span>
+          )}
+          {' '}tarea{periodTasks.length !== 1 ? 's' : ''} · {dateLabel}
         </span>
       </div>
 
@@ -429,10 +659,13 @@ export function AnalyticsDashboard({ tasks, users, registeredClients = [], curre
           <MyLoadTab
             myActive={myActive} myIP={myIP} myDone={myDone} myOverdue={myOverdue}
             myTopTasks={myTopTasks} myUrgency={myUrgency}
-            myTokensIP={myTokensIP} myTokensDone={myTokensDone}
-            myCapPct={myCapPct} currentUserCapacity={currentUserCapacity}
+            delegatedTasks={delegatedTasks} delegatedActive={delegatedActive} delegatedOverdue={delegatedOverdue}
+            myTokensPlanned={myTokensPlanned} myTokensIP={myTokensIP} myTokensDone={myTokensDone}
+            myCapPct={myCapPct} currentUserCapacity={loadCapacity}
             noDate={noDate} noTokens={noTokens}
+            weeklyForecast={myWeeklyForecast}
             now={now} periodLabel={period !== 'all' ? periodLabel : undefined}
+            displayName={displayName}
           />
         )}
         {activeTab === 'team' && isPrivileged && (
@@ -440,13 +673,16 @@ export function AnalyticsDashboard({ tasks, users, registeredClients = [], curre
             teamTasks={teamTasks} teamActive={teamActive} statusDist={statusDist}
             priorityDist={priorityDist} teamDoneInPeriod={teamDoneInPeriod}
             workload={workload} overloadedN={overloadedN}
+            weeklyForecast={teamWeeklyForecast}
+            unplannedTokens={unplannedActiveTokens}
+            unplannedCount={unplannedActiveCount}
             periodLabel={period !== 'all' ? periodLabel : undefined}
             initials={initials} displayName={displayName}
           />
         )}
         {activeTab === 'clients' && isPrivileged && (
           <ClientsTab
-            clientStats={clientStats} tasks={tasks}
+            clientStats={clientStats} tasks={periodMetricTasks}
             expandedClients={expandedClients} setExpandedClients={setExpandedClients}
             periodLabel={period !== 'all' ? periodLabel : undefined}
           />
@@ -466,20 +702,29 @@ export function AnalyticsDashboard({ tasks, users, registeredClients = [], curre
 // ── My Load Tab ───────────────────────────────────────────────────────────────
 
 function MyLoadTab({ myActive, myIP, myDone, myOverdue, myTopTasks, myUrgency,
-  myTokensIP, myTokensDone, myCapPct, currentUserCapacity,
-  noDate, noTokens, now, periodLabel }: {
+  delegatedTasks, delegatedActive, delegatedOverdue,
+  myTokensPlanned, myTokensIP, myTokensDone, myCapPct, currentUserCapacity, weeklyForecast,
+  noDate, noTokens, now, periodLabel, displayName }: {
   myActive: Task[]; myIP: Task[]; myDone: Task[]; myOverdue: Task[]
   myTopTasks: Task[]; myUrgency: Record<string, number>
-  myTokensIP: number; myTokensDone: number; myCapPct: number; currentUserCapacity: number
+  delegatedTasks: Task[]; delegatedActive: Task[]; delegatedOverdue: Task[]
+  myTokensPlanned: number; myTokensIP: number; myTokensDone: number; myCapPct: number; currentUserCapacity: number
+  weeklyForecast: { label: string; tokens: number; capacity: number; pct: number; tasks: number; taskItems: Task[] }[]
   noDate: number; noTokens: number; now: Date; periodLabel?: string
+  displayName: (id: string) => string
 }) {
   const completionRate = myActive.length + myDone.length > 0
     ? Math.round((myDone.length / (myActive.length + myDone.length)) * 100) : 0
-  const todayStr = now.toISOString().split('T')[0]
+  const todayStr = toDateKey(now)
+  const statusLabel: Record<Task['status'], string> = {
+    todo: 'Por hacer',
+    in_progress: 'En progreso',
+    done: 'Terminado',
+  }
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-5 px-5 py-3 bg-white/[0.025] border border-white/8 rounded-xl flex-wrap">
+      <div className="flex items-center justify-center gap-x-8 gap-y-4 px-8 py-5 bg-white/[0.025] border border-white/8 rounded-xl flex-wrap">
         <StatCell label="Activas"         value={myActive.length} />
         <Divider />
         <StatCell label="En progreso"     value={myIP.length} accent="yellow" />
@@ -489,7 +734,13 @@ function MyLoadTab({ myActive, myIP, myDone, myOverdue, myTopTasks, myUrgency,
         <StatCell label="Vencidas"        value={myOverdue.length} accent={myOverdue.length > 0 ? 'red' : 'white'} />
         <Divider />
         <StatCell label="Tasa completado" value={`${completionRate}%`} accent={completionRate >= 50 ? 'green' : completionRate > 20 ? 'yellow' : 'orange'} />
-        {currentUserCapacity > 0 && myTokensIP > 0 && (
+        {delegatedTasks.length > 0 && (
+          <>
+            <Divider />
+            <StatCell label="Delegadas" value={delegatedActive.length} sub={`${delegatedOverdue.length} en riesgo`} accent={delegatedOverdue.length > 0 ? 'orange' : 'blue'} />
+          </>
+        )}
+        {currentUserCapacity > 0 && myTokensPlanned > 0 && (
           <>
             <Divider />
             <StatCell label="Carga actual" value={`${myCapPct}%`} accent={myCapPct > 100 ? 'red' : myCapPct > 70 ? 'yellow' : 'white'} />
@@ -497,16 +748,19 @@ function MyLoadTab({ myActive, myIP, myDone, myOverdue, myTopTasks, myUrgency,
         )}
       </div>
 
-      <div className="grid grid-cols-[1fr_240px] gap-3">
-        <div className="bg-white/[0.025] border border-white/8 rounded-xl overflow-hidden">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-4 items-start">
+        <div className="bg-white/[0.025] border border-white/8 rounded-xl overflow-hidden self-start">
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/8">
             <p className="text-xs font-semibold uppercase tracking-widest text-neutral-400">Mis tareas activas</p>
             <span className="text-xs text-neutral-600">{myActive.length} total</span>
           </div>
           {myTopTasks.length === 0 ? (
-            <p className="text-xs text-neutral-700 text-center py-6">Sin tareas activas</p>
+            <div className="px-4 py-8">
+              <p className="text-xs text-neutral-700 text-center">Sin tareas activas</p>
+            </div>
           ) : (
-            <table className="w-full text-xs">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-xs">
               <thead>
                 <tr className="text-xs text-neutral-700 uppercase tracking-wider border-b border-white/5">
                   <th className="px-4 py-2 text-left">Tarea</th>
@@ -518,7 +772,7 @@ function MyLoadTab({ myActive, myIP, myDone, myOverdue, myTopTasks, myUrgency,
               <tbody>
                 {myTopTasks.map(t => {
                   const urg = getUrgency(t); const uc = URGENCY_CONFIG[urg]
-                  const daysLeft = t.due_date ? Math.round((new Date(t.due_date).getTime() - now.getTime()) / 86_400_000) : null
+                  const daysLeft = daysBetween(now, t.due_date)
                   return (
                     <tr key={t.id} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02]">
                       <td className="px-4 py-2.5">
@@ -543,11 +797,64 @@ function MyLoadTab({ myActive, myIP, myDone, myOverdue, myTopTasks, myUrgency,
                 })}
               </tbody>
             </table>
+            </div>
           )}
         </div>
 
-        <div className="flex flex-col gap-3">
-          <div className="bg-white/[0.025] border border-white/8 rounded-xl p-4">
+        <div className="flex flex-col gap-3 self-start">
+          {delegatedTasks.length > 0 && (
+            <div className="bg-white/[0.025] border border-white/8 rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-white/8 gap-3">
+                <p className="text-xs font-semibold uppercase tracking-widest text-neutral-400">Tareas delegadas bajo seguimiento</p>
+                <span className="text-xs text-neutral-600">{delegatedActive.length} activa{delegatedActive.length !== 1 ? 's' : ''}</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[440px] text-xs">
+                  <thead>
+                    <tr className="text-xs text-neutral-700 uppercase tracking-wider border-b border-white/5">
+                      <th className="px-5 py-2.5 text-left">Tarea</th>
+                      <th className="px-4 py-2.5 text-left">Ejecuta</th>
+                      <th className="px-4 py-2.5 text-left">Estado</th>
+                      <th className="px-5 py-2.5 text-right">Vence</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {delegatedTasks.slice(0, 8).map(t => {
+                      const urg = getUrgency(t)
+                      const daysLeft = daysBetween(now, t.due_date)
+                      return (
+                        <tr key={t.id} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02]">
+                          <td className="px-5 py-3">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={cn('text-[8px] font-semibold px-1 py-px rounded shrink-0', PRIORITY_CONFIG[t.priority].className)}>{PRIORITY_CONFIG[t.priority].label}</span>
+                              <span className="text-white truncate">{t.title}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-neutral-400 whitespace-nowrap">{displayName(getExecutionOwnerId(t))}</td>
+                          <td className="px-4 py-3">
+                            <span className={cn(
+                              'inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-medium',
+                              t.status === 'done' ? 'bg-green-500/15 text-green-400' : t.status === 'in_progress' ? 'bg-yellow-500/15 text-yellow-400' : 'bg-blue-500/15 text-blue-400',
+                            )}>
+                              <span className={cn('inline-block h-1.5 w-1.5 rounded-full', urg === 'critical' ? 'bg-red-400' : urg === 'high' ? 'bg-orange-400' : urg === 'medium' ? 'bg-yellow-400' : 'bg-slate-500')} />
+                              {statusLabel[t.status]}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3 text-right tabular-nums">
+                            {daysLeft === null ? <span className="text-neutral-700">—</span>
+                              : <span className={cn(daysLeft < 0 ? 'text-red-400 font-semibold' : daysLeft <= 2 ? 'text-orange-400' : 'text-neutral-500')}>
+                                  {daysLeft < 0 ? `+${Math.abs(daysLeft)}d` : `${daysLeft}d`}
+                                </span>}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          <div className="bg-white/[0.025] border border-white/8 rounded-xl p-5">
             <p className="text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-3">Distribución urgencia</p>
             <div className="flex flex-col gap-2">
               {(['critical', 'high', 'medium', 'low'] as UrgencyLevel[]).map(lvl => (
@@ -560,22 +867,22 @@ function MyLoadTab({ myActive, myIP, myDone, myOverdue, myTopTasks, myUrgency,
             </div>
           </div>
 
-          {myTokensIP > 0 && (
-            <div className="bg-white/[0.025] border border-white/8 rounded-xl p-4">
-              <p className="text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-3">Capacidad semanal</p>
+          {myTokensPlanned > 0 && (
+            <div className="bg-white/[0.025] border border-white/8 rounded-xl p-5">
+              <p className="text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-3">Carga prevista</p>
               <div className="h-2 rounded-full bg-white/8 overflow-hidden mb-2">
                 <div className={cn('h-full rounded-full transition-all duration-700', myCapPct > 100 ? 'bg-red-500' : myCapPct > 70 ? 'bg-yellow-500' : 'bg-blue-500')}
                   style={{ width: `${Math.min(myCapPct, 100)}%` }} />
               </div>
               <div className="flex justify-between text-xs text-neutral-600">
-                <span>{myTokensIP}t en progreso</span><span>Cap. {currentUserCapacity}t</span>
+                <span>{myTokensPlanned}t previstos</span><span>Cap. {currentUserCapacity}t</span>
               </div>
               {myTokensDone > 0 && <p className="text-xs text-green-400 mt-1.5">{myTokensDone}t completados · {tokensToHours(myTokensDone).toFixed(1)}h</p>}
             </div>
           )}
 
           {(myOverdue.length > 0 || noDate > 0 || noTokens > 0) && (
-            <div className="bg-white/[0.025] border border-white/8 rounded-xl p-4">
+            <div className="bg-white/[0.025] border border-white/8 rounded-xl p-5">
               <p className="text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-3">Calidad del backlog</p>
               <div className="flex flex-col gap-2">
                 {myOverdue.length > 0 && <InsightChip accent="red">{myOverdue.length} vencida{myOverdue.length !== 1 ? 's' : ''}</InsightChip>}
@@ -584,6 +891,23 @@ function MyLoadTab({ myActive, myIP, myDone, myOverdue, myTopTasks, myUrgency,
               </div>
             </div>
           )}
+          <div className="bg-white/[0.025] border border-white/8 rounded-xl p-5">
+            <p className="text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-3">Proyeccion semanal</p>
+            <div className="flex flex-col gap-2">
+              {weeklyForecast.map(week => (
+                <div key={week.label} className="grid grid-cols-[minmax(0,1fr)_54px_54px] items-center gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs text-white truncate">{week.label}</p>
+                    <p className="text-[10px] text-neutral-600">{week.tasks} tarea{week.tasks !== 1 ? 's' : ''}</p>
+                  </div>
+                  <p className="text-[11px] text-right tabular-nums text-neutral-400">{week.tokens}t</p>
+                  <p className={cn('text-[11px] text-right tabular-nums font-medium', week.pct > 100 ? 'text-red-400' : week.pct > 70 ? 'text-yellow-400' : 'text-neutral-500')}>
+                    {week.pct}%
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -593,14 +917,58 @@ function MyLoadTab({ myActive, myIP, myDone, myOverdue, myTopTasks, myUrgency,
 // ── Team Tab ──────────────────────────────────────────────────────────────────
 
 function TeamTab({ teamTasks, teamActive, statusDist, priorityDist, teamDoneInPeriod,
-  workload, overloadedN, periodLabel, initials, displayName }: {
+  workload, overloadedN, weeklyForecast, unplannedTokens, unplannedCount, periodLabel, initials, displayName }: {
   teamTasks: Task[]; teamActive: Task[]
   statusDist: { todo: number; in_progress: number; done: number }
   priorityDist: { critical: number; high: number; medium: number; low: number }
-  teamDoneInPeriod: number; workload: { userId: string; activeTasks: number; inProgress: number; tokensIP: number; tokensDone: number; capacity: number; overdue: number }[]
-  overloadedN: number; periodLabel?: string
+  teamDoneInPeriod: number; workload: { userId: string; activeTasks: number; inProgress: number; tokensPlanned: number; tokensDone: number; capacity: number; overdue: number }[]
+  overloadedN: number
+  weeklyForecast: { label: string; tokens: number; capacity: number; pct: number; tasks: number; taskItems: Task[] }[]
+  unplannedTokens: number
+  unplannedCount: number
+  periodLabel?: string
   initials: (id: string) => string; displayName: (id: string) => string
 }) {
+  const capacityByUser = new Map(workload.map(item => [item.userId, item.capacity]))
+
+  const weekOwnerLoad = weeklyForecast.map(week => {
+    const grouped = new Map<string, { userId: string; tokens: number; tasks: number; capacity: number; pct: number; excess: number }>()
+    for (const task of week.taskItems) {
+      const userId = getExecutionOwnerId(task)
+      const current = grouped.get(userId) ?? { userId, tokens: 0, tasks: 0, capacity: capacityByUser.get(userId) ?? 40, pct: 0, excess: 0 }
+      current.tokens += task.effort_tokens ?? 0
+      current.tasks += 1
+      grouped.set(userId, current)
+    }
+    return {
+      label: week.label,
+      owners: [...grouped.values()]
+        .map(item => ({
+          ...item,
+          pct: item.capacity > 0 ? Math.round((item.tokens / item.capacity) * 100) : 0,
+          excess: Math.max(item.tokens - item.capacity, 0),
+        }))
+        .sort((a, b) => b.excess - a.excess || b.tokens - a.tokens),
+    }
+  })
+
+  const pressureRows = weekOwnerLoad.flatMap(week =>
+    week.owners
+      .filter(owner => owner.tokens > 0 && owner.pct >= 85)
+      .map(owner => ({ week: week.label, ...owner })),
+  )
+
+  function actionSuggestion(task: Task, weekPct: number, ownerPct: number) {
+    const urgency = getUrgency(task)
+    const effort = task.effort_tokens ?? 0
+    if (urgency === 'critical' || urgency === 'high') return 'Mantener'
+    if (ownerPct > 100 && effort >= 4) return 'Reasignar'
+    if (weekPct > 100 && effort >= 8) return 'Mover semana'
+    if (weekPct > 100 && effort >= 4) return 'Reasignar'
+    if (task.priority === 'low' || task.priority === 'medium') return 'Bajar prioridad'
+    return 'Mantener'
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-5 px-5 py-3 bg-white/[0.025] border border-white/8 rounded-xl flex-wrap">
@@ -611,6 +979,8 @@ function TeamTab({ teamTasks, teamActive, statusDist, priorityDist, teamDoneInPe
         <StatCell label="Completadas" sub={periodLabel} value={teamDoneInPeriod} accent="green" />
         <Divider />
         <StatCell label="Terminadas total" value={statusDist.done} accent="green" />
+        <Divider />
+        <StatCell label="Tokens semana" value={`${weeklyForecast[0]?.tokens ?? 0}t`} accent={(weeklyForecast[0]?.pct ?? 0) > 100 ? 'red' : (weeklyForecast[0]?.pct ?? 0) > 70 ? 'yellow' : 'white'} />
         {overloadedN > 0 && (<><Divider /><StatCell label="Sobrecargados" value={overloadedN} accent="red" /></>)}
       </div>
 
@@ -618,13 +988,14 @@ function TeamTab({ teamTasks, teamActive, statusDist, priorityDist, teamDoneInPe
         <div className="px-4 py-2.5 border-b border-white/8">
           <p className="text-xs font-semibold uppercase tracking-widest text-neutral-400">Carga por persona</p>
         </div>
-        <table className="w-full text-xs">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[780px] text-xs">
           <thead>
             <tr className="text-xs text-neutral-700 uppercase tracking-wider border-b border-white/5">
               <th className="px-4 py-2 text-left">Persona</th>
               <th className="px-3 py-2 text-right">Activas</th>
               <th className="px-3 py-2 text-right">En progreso</th>
-              <th className="px-3 py-2 text-right">Tokens IP</th>
+              <th className="px-3 py-2 text-right">Tokens previstos</th>
               <th className="px-3 py-2 text-right">Tokens ✓</th>
               <th className="px-3 py-2 text-right">Vencidas</th>
               <th className="px-5 py-2 text-left w-36">Carga</th>
@@ -632,7 +1003,7 @@ function TeamTab({ teamTasks, teamActive, statusDist, priorityDist, teamDoneInPe
           </thead>
           <tbody>
             {workload.map(w => {
-              const pct = w.capacity > 0 ? Math.round((w.tokensIP / w.capacity) * 100) : 0
+              const pct = w.capacity > 0 ? Math.round((w.tokensPlanned / w.capacity) * 100) : 0
               const isOver = pct > 100
               return (
                 <tr key={w.userId} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02]">
@@ -644,7 +1015,7 @@ function TeamTab({ teamTasks, teamActive, statusDist, priorityDist, teamDoneInPe
                   </td>
                   <td className="px-3 py-2.5 text-right text-neutral-400 tabular-nums">{w.activeTasks}</td>
                   <td className="px-3 py-2.5 text-right text-yellow-400 tabular-nums">{w.inProgress}</td>
-                  <td className="px-3 py-2.5 text-right text-neutral-400 tabular-nums">{w.tokensIP}</td>
+                  <td className="px-3 py-2.5 text-right text-neutral-400 tabular-nums">{w.tokensPlanned}</td>
                   <td className="px-3 py-2.5 text-right text-green-400 tabular-nums">{w.tokensDone}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">
                     {w.overdue > 0 ? <span className="text-red-400 font-semibold">{w.overdue}</span> : <span className="text-neutral-700">—</span>}
@@ -662,9 +1033,10 @@ function TeamTab({ teamTasks, teamActive, statusDist, priorityDist, teamDoneInPe
             })}
           </tbody>
         </table>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="bg-white/[0.025] border border-white/8 rounded-xl p-4">
           <p className="text-xs font-semibold uppercase tracking-widest text-neutral-400 mb-3">Estado general</p>
           <div className="flex items-center gap-4">
@@ -701,6 +1073,152 @@ function TeamTab({ teamTasks, teamActive, statusDist, priorityDist, teamDoneInPe
           </div>
         </div>
       </div>
+
+      <div className="bg-white/[0.025] border border-white/8 rounded-xl p-4">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <p className="text-xs font-semibold uppercase tracking-widest text-neutral-400">Proyeccion semanal</p>
+          {unplannedCount > 0 && (
+            <span className="text-[10px] text-neutral-500">{unplannedCount} sin fecha · {unplannedTokens}t</span>
+          )}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+          {weeklyForecast.map((week, index) => {
+            const pressuredOwners = weekOwnerLoad[index]?.owners.filter(owner => owner.pct >= 85) ?? []
+            return (
+            <div
+              key={week.label}
+              className={cn(
+                'rounded-lg border bg-white/[0.02] p-3',
+                week.pct > 100 ? 'border-red-500/25' : 'border-white/8',
+              )}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-white">{week.label}</p>
+                {week.pct > 100 && (
+                  <span className="rounded border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[9px] font-medium text-red-300">
+                    Saturada
+                  </span>
+                )}
+              </div>
+              <p className="mt-2 text-lg font-semibold text-white tabular-nums">{week.tokens}t</p>
+              <p className="text-[10px] text-neutral-600">{week.tasks} tarea{week.tasks !== 1 ? 's' : ''} · cap. {week.capacity}t</p>
+              <div className="mt-3 h-1.5 rounded-full bg-white/8 overflow-hidden">
+                <div
+                  className={cn('h-full rounded-full', week.pct > 100 ? 'bg-red-500' : week.pct > 70 ? 'bg-yellow-500' : 'bg-blue-500')}
+                  style={{ width: `${Math.min(week.pct, 100)}%` }}
+                />
+              </div>
+              <p className={cn('mt-1 text-[10px] tabular-nums', week.pct > 100 ? 'text-red-400' : week.pct > 70 ? 'text-yellow-400' : 'text-neutral-500')}>
+                {week.pct}%
+              </p>
+              {pressuredOwners.length > 0 && (
+                <p className={cn('mt-2 text-[10px]', week.pct > 100 ? 'text-red-300' : 'text-yellow-300')}>
+                  {pressuredOwners.length} responsable{pressuredOwners.length !== 1 ? 's' : ''} al limite
+                </p>
+              )}
+            </div>
+          )})}
+        </div>
+        {pressureRows.length > 0 && (
+          <div className="mt-4 rounded-lg border border-white/8 bg-white/[0.015] overflow-hidden">
+            <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-white/8">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Focos de saturacion</p>
+              <span className="text-[10px] text-neutral-600">Responsables que ya rozan o superan su capacidad semanal</span>
+            </div>
+            <div className="grid grid-cols-[110px_minmax(0,1fr)_72px_72px_72px_56px] gap-3 px-4 py-2.5 border-b border-white/8 text-[10px] uppercase tracking-wider text-neutral-600">
+              <span>Semana</span>
+              <span>Responsable</span>
+              <span className="text-right">Carga</span>
+              <span className="text-right">Cap.</span>
+              <span className="text-right">Exceso</span>
+              <span className="text-right">Tareas</span>
+            </div>
+            <div className="divide-y divide-white/[0.05]">
+              {pressureRows.map(row => (
+                <div
+                  key={`${row.week}-${row.userId}`}
+                  className={cn(
+                    'grid grid-cols-[110px_minmax(0,1fr)_72px_72px_72px_56px] gap-3 px-4 py-2.5 items-center text-xs',
+                    row.pct > 100 ? 'bg-red-500/[0.03]' : 'bg-yellow-500/[0.03]',
+                  )}
+                >
+                  <span className="text-neutral-500">{row.week}</span>
+                  <div className="min-w-0 flex items-center gap-2">
+                    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-[10px] font-bold text-blue-300">
+                      {initials(row.userId)}
+                    </div>
+                    <span className="truncate text-white">{displayName(row.userId)}</span>
+                  </div>
+                  <span className={cn('text-right tabular-nums', row.pct > 100 ? 'text-red-200' : 'text-yellow-200')}>{row.tokens}t</span>
+                  <span className="text-right tabular-nums text-neutral-400">{row.capacity}t</span>
+                  <span className={cn('text-right tabular-nums font-medium', row.excess > 0 ? 'text-red-300' : 'text-yellow-300')}>
+                    {row.excess > 0 ? `+${row.excess}t` : '0t'}
+                  </span>
+                  <span className="text-right tabular-nums text-neutral-400">{row.tasks}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {weeklyForecast.some(week => week.taskItems.length > 0) && (
+          <div className="mt-4 rounded-lg border border-white/8 bg-white/[0.015] overflow-hidden">
+            <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-white/8">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Tareas proyectadas</p>
+              <span className="text-[10px] text-neutral-600">Ordenadas por esfuerzo para detectar rapido que mover</span>
+            </div>
+            <div className="grid grid-cols-[110px_minmax(0,1.4fr)_120px_120px_72px_72px_110px] gap-3 px-4 py-2.5 border-b border-white/8 text-[10px] uppercase tracking-wider text-neutral-600">
+              <span>Semana</span>
+              <span>Tarea</span>
+              <span>Responsable</span>
+              <span>Propietario</span>
+              <span>Prio.</span>
+              <span className="text-right">Esf.</span>
+              <span>Acción</span>
+            </div>
+            <div className="divide-y divide-white/[0.05]">
+              {weeklyForecast.flatMap(week =>
+                [...week.taskItems]
+                  .sort((a, b) => (b.effort_tokens ?? 0) - (a.effort_tokens ?? 0))
+                  .map(task => {
+                  const ownerPct = weekOwnerLoad
+                    .find(item => item.label === week.label)
+                    ?.owners.find(owner => owner.userId === getExecutionOwnerId(task))
+                    ?.pct ?? 0
+                  const suggestion = actionSuggestion(task, week.pct, ownerPct)
+                  const urgency = getUrgency(task)
+                  return (
+                  <div
+                    key={`${week.label}-${task.id}`}
+                    className={cn(
+                      'grid grid-cols-[110px_minmax(0,1.4fr)_120px_120px_72px_72px_110px] gap-3 px-4 py-2.5 items-center text-xs',
+                      week.pct > 100 && 'bg-red-500/[0.03]',
+                    )}
+                  >
+                    <span className="text-neutral-500">{week.label}</span>
+                    <div className="min-w-0 flex items-center gap-2">
+                      <span className={cn('inline-block h-1.5 w-1.5 shrink-0 rounded-full', urgency === 'critical' ? 'bg-red-500' : urgency === 'high' ? 'bg-orange-400' : urgency === 'medium' ? 'bg-yellow-400' : 'bg-blue-400')} />
+                      <span className="truncate text-white">{task.title}</span>
+                    </div>
+                    <span className="truncate text-neutral-400">{displayName(getExecutionOwnerId(task))}</span>
+                    <span className="truncate text-neutral-500">{displayName(task.task_owner_id ?? task.user_id)}</span>
+                    <span className={cn('w-fit rounded px-1 py-px text-[10px] font-semibold', PRIORITY_CONFIG[task.priority].className)}>{PRIORITY_CONFIG[task.priority].label}</span>
+                    <span className={cn('text-right tabular-nums', week.pct > 100 ? 'text-red-200' : 'text-neutral-300')}>{task.effort_tokens ?? 0}t</span>
+                    <span className={cn(
+                      'w-fit rounded px-1.5 py-0.5 text-[10px] font-medium',
+                      suggestion === 'Mover semana' ? 'bg-red-500/15 text-red-300'
+                        : suggestion === 'Reasignar' ? 'bg-orange-500/15 text-orange-300'
+                        : suggestion === 'Bajar prioridad' ? 'bg-blue-500/15 text-blue-300'
+                        : 'bg-green-500/15 text-green-300',
+                    )}>
+                      {suggestion}
+                    </span>
+                  </div>
+                )}),
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -729,22 +1247,24 @@ function ClientsTab({ clientStats, tasks, expandedClients, setExpandedClients, p
       <div className="flex items-center gap-5 px-5 py-3 bg-white/[0.025] border border-white/8 rounded-xl flex-wrap">
         <StatCell label="Clientes activos"    value={realClients.length} />
         <Divider />
-        <StatCell label="H pendientes"        value={`${tokensToHours(totalEstim).toFixed(0)}h`} accent="yellow" />
+        <StatCell label="Inversión prevista" sub={periodLabel} value={`${tokensToHours(totalEstim).toFixed(0)}h`} accent="yellow" />
         <Divider />
-        <StatCell label="H completadas" sub={periodLabel} value={`${tokensToHours(totalDone).toFixed(0)}h`} accent="green" />
+        <StatCell label="Horas cerradas" sub={periodLabel} value={`${tokensToHours(totalDone).toFixed(0)}h`} accent="green" />
         <Divider />
         <StatCell label="Tareas con cliente"  value={realClients.reduce((s, c) => s + c.tasks.length, 0)} />
       </div>
 
       <div className="bg-white/[0.025] border border-white/8 rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
+        <div className="min-w-[900px]">
         {/* Header */}
-        <div className="grid grid-cols-[1fr_56px_52px_52px_1fr_88px] px-4 py-2 border-b border-white/8 text-xs text-neutral-600 uppercase tracking-wider">
+        <div className="grid grid-cols-[minmax(260px,1fr)_72px_72px_72px_minmax(300px,1fr)_112px] gap-3 px-5 py-3 border-b border-white/8 text-[10px] text-neutral-600 uppercase tracking-wider">
           <span>Cliente / Proyecto</span>
           <span className="text-right">Activas</span>
-          <span className="text-right">Hechas</span>
-          <span className="text-right">Riesgo</span>
-          <span className="pl-3">Horas pendiente / hecho</span>
-          <span className="text-right pr-1">% completado</span>
+          <span className="text-right">Cerradas</span>
+          <span className="text-right">Vencidas</span>
+          <span>Inversión estimada / cerrada</span>
+          <span className="text-right">% cierre</span>
         </div>
 
         {clientStats.length === 0 ? (
@@ -766,7 +1286,7 @@ function ClientsTab({ clientStats, tasks, expandedClients, setExpandedClients, p
               <div
                 onClick={() => hasProjects && toggleClient(cs.client)}
                 className={cn(
-                  'grid grid-cols-[1fr_56px_52px_52px_1fr_88px] px-4 py-2.5 border-b border-white/[0.04] hover:bg-white/[0.02] items-center',
+                  'grid grid-cols-[minmax(260px,1fr)_72px_72px_72px_minmax(300px,1fr)_112px] gap-3 px-5 py-3 border-b border-white/[0.04] hover:bg-white/[0.02] items-center',
                   hasProjects && 'cursor-pointer',
                   cs.client === '(Sin cliente)' && 'opacity-50',
                 )}
@@ -783,7 +1303,7 @@ function ClientsTab({ clientStats, tasks, expandedClients, setExpandedClients, p
                 <span className="text-right text-xs tabular-nums">
                   {cs.overdue > 0 ? <span className="text-red-400 font-semibold">{cs.overdue}</span> : <span className="text-neutral-700">—</span>}
                 </span>
-                <div className="pl-3"><HoursBar done={cs.doneTokens} total={cs.estimTokens + cs.doneTokens} /></div>
+                <div><HoursBar done={cs.doneTokens} total={cs.estimTokens + cs.doneTokens} /></div>
                 <div className="flex items-center justify-end gap-1.5 pr-1">
                   <span className="text-xs tabular-nums text-neutral-400">{completePct}%</span>
                   <div className="w-12 h-1.5 rounded-full bg-white/8 overflow-hidden">
@@ -798,7 +1318,7 @@ function ClientsTab({ clientStats, tasks, expandedClients, setExpandedClients, p
                 const pPct   = pTotal > 0 ? Math.round((ps.done / pTotal) * 100) : 0
                 return (
                   <div key={ps.project}
-                    className="grid grid-cols-[1fr_56px_52px_52px_1fr_88px] px-4 py-2 border-b border-white/[0.03] bg-white/[0.015] last:border-b-0 items-center">
+                    className="grid grid-cols-[minmax(260px,1fr)_72px_72px_72px_minmax(300px,1fr)_112px] gap-3 px-5 py-2.5 border-b border-white/[0.03] bg-white/[0.015] last:border-b-0 items-center">
                     <div className="flex items-center gap-2 pl-7 min-w-0">
                       <span className="w-1 h-1 rounded-full bg-white/20 shrink-0" />
                       <span className="text-xs text-neutral-400 truncate">{ps.project}</span>
@@ -809,7 +1329,7 @@ function ClientsTab({ clientStats, tasks, expandedClients, setExpandedClients, p
                     <span className="text-right text-xs tabular-nums">
                       {ps.overdue > 0 ? <span className="text-red-400">{ps.overdue}</span> : <span className="text-neutral-700">—</span>}
                     </span>
-                    <div className="pl-3"><HoursBar done={ps.doneTokens} total={ps.estimTokens + ps.doneTokens} /></div>
+                    <div><HoursBar done={ps.doneTokens} total={ps.estimTokens + ps.doneTokens} /></div>
                     <div className="flex items-center justify-end gap-1.5 pr-1">
                       <span className="text-xs tabular-nums text-neutral-500">{pPct}%</span>
                       <div className="w-12 h-1.5 rounded-full bg-white/8 overflow-hidden">
@@ -822,6 +1342,8 @@ function ClientsTab({ clientStats, tasks, expandedClients, setExpandedClients, p
             </div>
           )
         })}
+        </div>
+        </div>
       </div>
 
       {noClientCount > 0 && (
@@ -881,7 +1403,7 @@ function RisksTab({ overdueAll, unassigned, highRisk, riskScore, now, displayNam
                 </thead>
                 <tbody>
                   {overdueAll.slice(0, 8).map(t => {
-                    const late = Math.round((now.getTime() - new Date(t.due_date!).getTime()) / 86_400_000)
+                    const late = Math.abs(daysBetween(now, t.due_date) ?? 0)
                     return (
                       <tr key={t.id} className="border-b border-red-500/[0.08] last:border-0 hover:bg-red-500/[0.03]">
                         <td className="px-4 py-2.5 text-white max-w-[200px] truncate">{t.title}</td>
@@ -911,7 +1433,7 @@ function RisksTab({ overdueAll, unassigned, highRisk, riskScore, now, displayNam
                     <span className={cn('text-xs px-1 py-px rounded font-semibold shrink-0', PRIORITY_CONFIG[t.priority].className)}>{PRIORITY_CONFIG[t.priority].label}</span>
                     <span className="text-xs text-white flex-1 truncate">{t.title}</span>
                     {t.client && <span className="text-xs text-teal-400 shrink-0">{t.client}</span>}
-                    {t.due_date && <span className="text-xs text-neutral-600 shrink-0">{new Date(t.due_date).toLocaleDateString('es', { day: '2-digit', month: 'short' })}</span>}
+                    {t.due_date && <span className="text-xs text-neutral-600 shrink-0">{parseLocalDate(t.due_date)?.toLocaleDateString('es', { day: '2-digit', month: 'short' })}</span>}
                   </div>
                 ))}
               </div>
@@ -929,7 +1451,7 @@ function RisksTab({ overdueAll, unassigned, highRisk, riskScore, now, displayNam
               </div>
               <div className="flex flex-col">
                 {highRisk.map(t => {
-                  const d = Math.round((new Date(t.due_date!).getTime() - now.getTime()) / 86_400_000)
+                  const d = daysBetween(now, t.due_date) ?? 0
                   return (
                     <div key={t.id} className="flex items-center gap-3 px-4 py-2 border-b border-yellow-500/[0.08] last:border-0">
                       <span className="text-xs px-1 py-px rounded bg-yellow-500/20 text-yellow-400 shrink-0 tabular-nums">{d}d</span>

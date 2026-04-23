@@ -19,11 +19,12 @@ export function useChat() {
     setBoardChanged(false)
 
     try {
-      const { reply, boardChanged: changed } = await chatWithTasks(next)
+      const recentContext = next.slice(-6)
+      const { reply, boardChanged: changed } = await chatWithTasks(recentContext)
       setMessages([...next, { role: 'assistant', content: reply }])
       if (changed) setBoardChanged(true)
-    } catch {
-      setError('Error al conectar con el asistente. Intenta de nuevo.')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al conectar con el asistente. Intenta de nuevo.')
     } finally {
       setIsLoading(false)
     }
