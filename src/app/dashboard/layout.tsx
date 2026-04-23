@@ -13,10 +13,11 @@ export default async function DashboardLayout({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Ensure profile row exists, and fetch full_name in one shot
+  // Upsert ensures the profile row exists; without ignoreDuplicates the row
+  // is always returned (ON CONFLICT DO UPDATE returns the existing row).
   const { data: profile } = await supabase
     .from('profiles')
-    .upsert({ id: user.id }, { onConflict: 'id', ignoreDuplicates: true })
+    .upsert({ id: user.id }, { onConflict: 'id' })
     .select('full_name')
     .single()
 
