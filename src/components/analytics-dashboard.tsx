@@ -167,17 +167,35 @@ function MiniBar({ value, max, color }: { value: number; max: number; color: str
 
 function HoursBar({ done, total }: { done: number; total: number }) {
   const scope   = Math.max(total, 1)
-  const donePct = Math.min((done / scope) * 100, 100)
-  const remPct  = Math.min(((total - done) / scope) * 100, 100)
+  const donePct = Math.round(Math.min((done / scope) * 100, 100))
+  const doneH   = tokensToHours(done).toFixed(1)
+  const totalH  = tokensToHours(total).toFixed(1)
+  const pendingH = tokensToHours(Math.max(total - done, 0)).toFixed(1)
+  const allDone = done >= total && total > 0
+
   return (
-    <div className="flex items-center gap-2 w-full">
-      <div className="flex-1 h-2 rounded-full bg-white/5 overflow-hidden flex">
-        <div className="h-full bg-green-500/60 transition-all" style={{ width: `${donePct}%` }} />
-        <div className="h-full bg-blue-500/25 transition-all"  style={{ width: `${remPct}%`  }} />
+    <div className="flex items-center gap-3 w-full">
+      {/* Bar + percentage */}
+      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+        <div className="flex-1 h-2 rounded-full bg-white/8 overflow-hidden">
+          <div
+            className={cn('h-full rounded-full transition-all', allDone ? 'bg-green-500' : donePct > 70 ? 'bg-blue-400' : 'bg-blue-500/60')}
+            style={{ width: `${donePct}%` }}
+          />
+        </div>
+        <span className={cn('text-xs tabular-nums shrink-0 font-medium w-9 text-right', allDone ? 'text-green-400' : 'text-neutral-400')}>
+          {donePct}%
+        </span>
       </div>
-      <span className="text-xs text-neutral-500 tabular-nums shrink-0 w-24 text-right">
-        {tokensToHours(done).toFixed(1)}h / {tokensToHours(total).toFixed(1)}h
-      </span>
+      {/* Numbers */}
+      <div className="shrink-0 text-right w-36">
+        <span className="text-xs text-green-400 tabular-nums">{doneH}h hechas</span>
+        <span className="text-neutral-700 mx-1">·</span>
+        {allDone
+          ? <span className="text-[10px] text-green-600">completado</span>
+          : <span className="text-[10px] text-neutral-600">{pendingH}h pendiente</span>
+        }
+      </div>
     </div>
   )
 }
@@ -1241,9 +1259,10 @@ function ClientsTab({ clientStats, tasks, expandedClients, setExpandedClients, p
   expandedClients: Set<string>; setExpandedClients: (fn: (p: Set<string>) => Set<string>) => void
   periodLabel?: string
 }) {
-  const totalPlanned = clientStats.reduce((s, c) => s + c.estimTokens + c.doneTokens, 0)
-  const totalDone    = clientStats.reduce((s, c) => s + c.doneTokens, 0)
-  const realClients  = clientStats.filter(c => c.client !== '(Sin cliente)')
+  const totalPlanned  = clientStats.reduce((s, c) => s + c.estimTokens + c.doneTokens, 0)
+  const totalDone     = clientStats.reduce((s, c) => s + c.doneTokens, 0)
+  const totalPending  = Math.max(totalPlanned - totalDone, 0)
+  const realClients   = clientStats.filter(c => c.client !== '(Sin cliente)')
   const noClientCount = tasks.filter(t => t.status !== 'done' && !t.client).length
 
   function toggleClient(client: string) {
@@ -1253,26 +1272,27 @@ function ClientsTab({ clientStats, tasks, expandedClients, setExpandedClients, p
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-5 px-5 py-3 bg-white/[0.025] border border-white/8 rounded-xl flex-wrap">
-        <StatCell label="Clientes activos"    value={realClients.length} />
+        <StatCell label="Clientes activos"  value={realClients.length} />
         <Divider />
-        <StatCell label="Inversión del periodo" sub={periodLabel} value={`${tokensToHours(totalPlanned).toFixed(0)}h`} accent="yellow" />
+        <StatCell label="Planificado" sub={periodLabel}  value={`${tokensToHours(totalPlanned).toFixed(0)}h`}  accent="yellow" />
         <Divider />
-        <StatCell label="Horas cerradas" sub={periodLabel} value={`${tokensToHours(totalDone).toFixed(0)}h`} accent="green" />
+        <StatCell label="Completado"  sub={periodLabel}  value={`${tokensToHours(totalDone).toFixed(0)}h`}    accent="green" />
         <Divider />
-        <StatCell label="Tareas con cliente"  value={realClients.reduce((s, c) => s + c.tasks.length, 0)} />
+        <StatCell label="Pendiente"   sub={periodLabel}  value={`${tokensToHours(totalPending).toFixed(0)}h`} accent={totalPending > 0 ? 'orange' : 'white'} />
+        <Divider />
+        <StatCell label="Tareas con cliente" value={realClients.reduce((s, c) => s + c.tasks.length, 0)} />
       </div>
 
       <div className="bg-white/[0.025] border border-white/8 rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
         <div className="min-w-[900px]">
         {/* Header */}
-        <div className="grid grid-cols-[minmax(260px,1fr)_72px_72px_72px_minmax(300px,1fr)_112px] gap-3 px-5 py-3 border-b border-white/8 text-[10px] text-neutral-600 uppercase tracking-wider">
+        <div className="grid grid-cols-[minmax(260px,1fr)_80px_80px_80px_minmax(340px,1fr)] gap-3 px-5 py-3 border-b border-white/8 text-[10px] text-neutral-600 uppercase tracking-wider">
           <span>Cliente / Proyecto</span>
-          <span className="text-right">Activas</span>
-          <span className="text-right">Cerradas</span>
+          <span className="text-right">En curso</span>
+          <span className="text-right">Listas</span>
           <span className="text-right">Vencidas</span>
-          <span>Inversión estimada / cerrada</span>
-          <span className="text-right">% cierre</span>
+          <span>Progreso (horas)</span>
         </div>
 
         {clientStats.length === 0 ? (
@@ -1284,8 +1304,6 @@ function ClientsTab({ clientStats, tasks, expandedClients, setExpandedClients, p
           </div>
         ) : clientStats.map(cs => {
           const isExpanded  = expandedClients.has(cs.client)
-          const total       = cs.active + cs.done
-          const completePct = total > 0 ? Math.round((cs.done / total) * 100) : 0
           const hasProjects = cs.projects.length > 0
 
           return (
@@ -1294,7 +1312,7 @@ function ClientsTab({ clientStats, tasks, expandedClients, setExpandedClients, p
               <div
                 onClick={() => hasProjects && toggleClient(cs.client)}
                 className={cn(
-                  'grid grid-cols-[minmax(260px,1fr)_72px_72px_72px_minmax(300px,1fr)_112px] gap-3 px-5 py-3 border-b border-white/[0.04] hover:bg-white/[0.02] items-center',
+                  'grid grid-cols-[minmax(260px,1fr)_80px_80px_80px_minmax(340px,1fr)] gap-3 px-5 py-3 border-b border-white/[0.04] hover:bg-white/[0.02] items-center',
                   hasProjects && 'cursor-pointer',
                   cs.client === '(Sin cliente)' && 'opacity-50',
                 )}
@@ -1312,21 +1330,13 @@ function ClientsTab({ clientStats, tasks, expandedClients, setExpandedClients, p
                   {cs.overdue > 0 ? <span className="text-red-400 font-semibold">{cs.overdue}</span> : <span className="text-neutral-700">—</span>}
                 </span>
                 <div><HoursBar done={cs.doneTokens} total={cs.estimTokens + cs.doneTokens} /></div>
-                <div className="flex items-center justify-end gap-1.5 pr-1">
-                  <span className="text-xs tabular-nums text-neutral-400">{completePct}%</span>
-                  <div className="w-12 h-1.5 rounded-full bg-white/8 overflow-hidden">
-                    <div className="h-full bg-green-500 transition-all" style={{ width: `${completePct}%` }} />
-                  </div>
-                </div>
               </div>
 
               {/* Project sub-rows */}
               {isExpanded && cs.projects.map(ps => {
-                const pTotal = ps.active + ps.done
-                const pPct   = pTotal > 0 ? Math.round((ps.done / pTotal) * 100) : 0
                 return (
                   <div key={ps.project}
-                    className="grid grid-cols-[minmax(260px,1fr)_72px_72px_72px_minmax(300px,1fr)_112px] gap-3 px-5 py-2.5 border-b border-white/[0.03] bg-white/[0.015] last:border-b-0 items-center">
+                    className="grid grid-cols-[minmax(260px,1fr)_80px_80px_80px_minmax(340px,1fr)] gap-3 px-5 py-2.5 border-b border-white/[0.03] bg-white/[0.015] last:border-b-0 items-center">
                     <div className="flex items-center gap-2 pl-7 min-w-0">
                       <span className="w-1 h-1 rounded-full bg-white/20 shrink-0" />
                       <span className="text-xs text-neutral-400 truncate">{ps.project}</span>
@@ -1338,12 +1348,6 @@ function ClientsTab({ clientStats, tasks, expandedClients, setExpandedClients, p
                       {ps.overdue > 0 ? <span className="text-red-400">{ps.overdue}</span> : <span className="text-neutral-700">—</span>}
                     </span>
                     <div><HoursBar done={ps.doneTokens} total={ps.estimTokens + ps.doneTokens} /></div>
-                    <div className="flex items-center justify-end gap-1.5 pr-1">
-                      <span className="text-xs tabular-nums text-neutral-500">{pPct}%</span>
-                      <div className="w-12 h-1.5 rounded-full bg-white/8 overflow-hidden">
-                        <div className="h-full bg-green-500/60 transition-all" style={{ width: `${pPct}%` }} />
-                      </div>
-                    </div>
                   </div>
                 )
               })}
