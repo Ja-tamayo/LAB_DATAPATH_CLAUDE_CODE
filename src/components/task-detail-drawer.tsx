@@ -31,7 +31,7 @@ interface TaskDetailDrawerProps {
 function Block({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-neutral-600 border-b border-white/5 pb-1">
+      <p className="border-b border-white/6 pb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-500">
         {title}
       </p>
       {children}
@@ -42,7 +42,7 @@ function Block({ title, children }: { title: string; children: React.ReactNode }
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-[10px] text-neutral-500 uppercase tracking-wider">{label}</span>
+      <span className="text-[10px] uppercase tracking-[0.16em] text-neutral-500">{label}</span>
       {children}
     </div>
   )
@@ -162,12 +162,12 @@ export function TaskDetailDrawer({
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40" onClick={onClose} />
 
       {/* Drawer */}
-      <div className="fixed top-0 right-0 h-full w-[440px] max-w-[95vw] bg-[#0d0d1a] border-l border-white/10 shadow-2xl z-50 flex flex-col">
+      <div className="fixed top-0 right-0 z-50 flex h-full w-[520px] max-w-[96vw] flex-col border-l border-white/10 bg-[#0d0d1a] shadow-2xl">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 shrink-0">
+        <div className="flex shrink-0 items-center justify-between border-b border-white/6 px-5 py-4">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-white">Detalle de tarea</span>
+            <span className="text-base font-semibold text-white">Detalle de tarea</span>
             <span className={cn(
               'text-[10px] font-semibold px-1.5 py-0.5 rounded',
               urgencyConfig.className,
@@ -184,7 +184,7 @@ export function TaskDetailDrawer({
         </div>
 
         {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
+        <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-5">
 
           {/* ── 1. Información base ─────────────────────────────────────── */}
           <Block title="Información base">
@@ -221,7 +221,7 @@ export function TaskDetailDrawer({
                   const hasExtra = client && !allOpts.find(c => c.name === client)
                   return (
                     <Select value={client || '__none__'} onValueChange={val => { setClient(val === '__none__' ? '' : val); setProject('') }}>
-                      <SelectTrigger className="bg-white/5 border-white/10 text-white text-xs h-8">
+                      <SelectTrigger className="h-10 bg-white/5 border-white/10 text-sm text-white">
                         <SelectValue placeholder="—" />
                       </SelectTrigger>
                       <SelectContent className="bg-[#1a1a2e] border-white/10 text-white z-[60]">
@@ -238,7 +238,7 @@ export function TaskDetailDrawer({
                     value={client}
                     onChange={e => setClient(e.target.value)}
                     placeholder="—"
-                    className="bg-white/5 border-white/10 text-white text-xs h-8"
+                    className="h-10 bg-white/5 border-white/10 text-sm text-white"
                   />
                 ) : (
                   <ReadValue>{task.client ?? '—'}</ReadValue>
@@ -251,7 +251,7 @@ export function TaskDetailDrawer({
                   const hasExtra = project && !projs.find(p => p.name === project)
                   return projs.length > 0 || hasExtra ? (
                     <Select value={project || '__none__'} onValueChange={val => setProject(val === '__none__' ? '' : val)}>
-                      <SelectTrigger className="bg-white/5 border-white/10 text-white text-xs h-8">
+                      <SelectTrigger className="h-10 bg-white/5 border-white/10 text-sm text-white">
                         <SelectValue placeholder="—" />
                       </SelectTrigger>
                       <SelectContent className="bg-[#1a1a2e] border-white/10 text-white z-[60]">
@@ -268,7 +268,7 @@ export function TaskDetailDrawer({
                       onChange={e => setProject(e.target.value)}
                       placeholder={client ? '—' : 'Selecciona cliente'}
                       disabled={!client}
-                      className="bg-white/5 border-white/10 text-white text-xs h-8 disabled:opacity-40"
+                      className="h-10 bg-white/5 border-white/10 text-sm text-white disabled:opacity-40"
                     />
                   )
                 })() : canEdit ? (
@@ -276,7 +276,7 @@ export function TaskDetailDrawer({
                     value={project}
                     onChange={e => setProject(e.target.value)}
                     placeholder="—"
-                    className="bg-white/5 border-white/10 text-white text-xs h-8"
+                    className="h-10 bg-white/5 border-white/10 text-sm text-white"
                   />
                 ) : (
                   <ReadValue>{task.project ?? '—'}</ReadValue>
@@ -291,7 +291,7 @@ export function TaskDetailDrawer({
               <Field label="Estado">
                 {canEdit ? (
                   <Select value={status} onValueChange={v => setStatus(v as TaskStatus)}>
-                    <SelectTrigger className="bg-white/5 border-white/10 text-white text-xs h-8">
+                    <SelectTrigger className="h-10 bg-white/5 border-white/10 text-sm text-white">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-[#1a1a2e] border-white/10 text-white z-[60]">
@@ -310,7 +310,7 @@ export function TaskDetailDrawer({
               <Field label="Prioridad">
                 {canEdit ? (
                   <Select value={priority} onValueChange={v => setPriority(v as TaskPriority)}>
-                    <SelectTrigger className="bg-white/5 border-white/10 text-white text-xs h-8">
+                    <SelectTrigger className="h-10 bg-white/5 border-white/10 text-sm text-white">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-[#1a1a2e] border-white/10 text-white z-[60]">
@@ -329,7 +329,7 @@ export function TaskDetailDrawer({
               <Field label="Impacto">
                 {canEdit ? (
                   <Select value={impact} onValueChange={v => setImpact(v as ImpactLevel)}>
-                    <SelectTrigger className="bg-white/5 border-white/10 text-white text-xs h-8">
+                    <SelectTrigger className="h-10 bg-white/5 border-white/10 text-sm text-white">
                       <SelectValue placeholder="—" />
                     </SelectTrigger>
                     <SelectContent className="bg-[#1a1a2e] border-white/10 text-white z-[60]">
@@ -351,7 +351,7 @@ export function TaskDetailDrawer({
                     value={tokens}
                     onChange={e => setTokens(e.target.value)}
                     placeholder="0"
-                    className="bg-white/5 border-white/10 text-white text-xs h-8"
+                    className="h-10 bg-white/5 border-white/10 text-sm text-white"
                   />
                 ) : (
                   <ReadValue>
@@ -382,7 +382,7 @@ export function TaskDetailDrawer({
             <Field label="Propietario de tarea">
               {isLeaderOrAdmin && users.length > 0 ? (
                 <Select value={taskOwner} onValueChange={setTaskOwner}>
-                  <SelectTrigger className="bg-white/5 border-white/10 text-white text-xs h-8">
+                  <SelectTrigger className="h-10 bg-white/5 border-white/10 text-sm text-white">
                     <SelectValue placeholder="—" />
                   </SelectTrigger>
                   <SelectContent className="bg-[#1a1a2e] border-white/10 text-white z-[60]">
@@ -402,7 +402,7 @@ export function TaskDetailDrawer({
             <Field label="Responsable de ejecución">
               {isLeaderOrAdmin && users.length > 0 ? (
                 <Select value={assignedTo} onValueChange={setAssignedTo}>
-                  <SelectTrigger className="bg-white/5 border-white/10 text-white text-xs h-8">
+                  <SelectTrigger className="h-10 bg-white/5 border-white/10 text-sm text-white">
                     <SelectValue placeholder="—" />
                   </SelectTrigger>
                   <SelectContent className="bg-[#1a1a2e] border-white/10 text-white z-[60]">
@@ -428,7 +428,7 @@ export function TaskDetailDrawer({
                     type="date"
                     value={estStart}
                     onChange={e => setEstStart(e.target.value)}
-                    className="bg-white/5 border-white/10 text-white text-xs h-8"
+                    className="h-10 bg-white/5 border-white/10 text-sm text-white"
                   />
                 ) : (
                   <ReadValue>
@@ -445,7 +445,7 @@ export function TaskDetailDrawer({
                     type="date"
                     value={dueDate}
                     onChange={e => setDueDate(e.target.value)}
-                    className="bg-white/5 border-white/10 text-white text-xs h-8"
+                    className="h-10 bg-white/5 border-white/10 text-sm text-white"
                   />
                 ) : (
                   <ReadValue>
@@ -497,7 +497,7 @@ export function TaskDetailDrawer({
 
         {/* Footer */}
         {canEdit && (
-          <div className="p-4 border-t border-white/5 flex items-center justify-between gap-2 shrink-0">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-t border-white/6 px-5 py-4">
             {isAdmin && (
               <button
                 onClick={handleDelete}
@@ -511,7 +511,7 @@ export function TaskDetailDrawer({
             <button
               onClick={handleSave}
               disabled={isPending}
-              className="ml-auto flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition-colors text-white text-xs font-medium px-4 py-2 rounded-lg"
+              className="ml-auto flex h-10 items-center gap-1.5 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
             >
               <Save className="w-3.5 h-3.5" />
               {isPending ? 'Guardando…' : 'Guardar'}

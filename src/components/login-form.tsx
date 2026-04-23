@@ -14,17 +14,20 @@ export function LoginForm({ defaultTab, serverError, serverMessage }: LoginFormP
   const domainsLabel = allowedEmailDomainsLabel()
 
   return (
-    <div className="w-full max-w-sm">
+    <div className="w-full max-w-md">
       <div className="mb-8 flex items-center justify-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 text-sm font-bold text-white">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 text-sm font-bold text-white shadow-[0_0_28px_rgba(59,130,246,0.28)]">
           T
         </div>
-        <span className="text-2xl font-semibold text-white">
-          TaskFlow <span className="text-blue-400">AI</span>
-        </span>
+        <div>
+          <span className="block text-2xl font-semibold text-white">
+            TaskFlow <span className="text-blue-400">AI</span>
+          </span>
+          <span className="block text-xs text-neutral-500">Acceso al espacio operativo</span>
+        </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+      <div className="rounded-2xl border border-white/10 bg-white/[0.045] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.28)]">
         <form action={login} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <label htmlFor="email" className="text-sm text-neutral-400">
@@ -38,7 +41,7 @@ export function LoginForm({ defaultTab, serverError, serverMessage }: LoginFormP
               autoComplete="email"
               required
               placeholder="tu@test1234.com"
-              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-neutral-600 transition-colors focus:border-blue-500 focus:outline-none"
+              className="h-11 rounded-lg border border-white/10 bg-white/[0.04] px-3 text-sm text-white placeholder:text-neutral-600 transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             />
           </div>
 
@@ -53,7 +56,7 @@ export function LoginForm({ defaultTab, serverError, serverMessage }: LoginFormP
               autoComplete="current-password"
               required
               placeholder="********"
-              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-neutral-600 transition-colors focus:border-blue-500 focus:outline-none"
+              className="h-11 rounded-lg border border-white/10 bg-white/[0.04] px-3 text-sm text-white placeholder:text-neutral-600 transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             />
           </div>
 
@@ -77,7 +80,7 @@ export function LoginForm({ defaultTab, serverError, serverMessage }: LoginFormP
 
           <button
             type="submit"
-            className="mt-1 rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-500"
+            className="mt-2 h-11 rounded-lg bg-blue-600 text-sm font-medium text-white transition-colors hover:bg-blue-500"
           >
             Iniciar sesion
           </button>

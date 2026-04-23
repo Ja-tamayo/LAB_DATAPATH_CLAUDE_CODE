@@ -54,22 +54,25 @@ export function SidebarNav({ role, userEmail }: SidebarNavProps) {
   )
 
   return (
-    <aside className="w-[220px] shrink-0 bg-[#0a0a14] border-r border-white/5 flex flex-col min-h-screen sticky top-0">
+    <aside className="sticky top-0 flex h-screen supports-[height:100dvh]:h-[100dvh] w-[236px] shrink-0 flex-col overflow-y-auto border-r border-white/6 bg-[#0b0c15]/95 backdrop-blur">
 
-      {/* Logo */}
-      <div className="px-4 py-4 border-b border-white/5">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-md bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-white font-bold text-xs shrink-0">
+      <div className="border-b border-white/6 px-4 py-5">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 text-sm font-bold text-white shadow-[0_0_24px_rgba(59,130,246,0.25)]">
             T
           </div>
-          <span className="text-sm font-semibold">
-            TaskFlow <span className="text-blue-400">AI</span>
-          </span>
+          <div>
+            <span className="block text-sm font-semibold leading-none">
+              TaskFlow <span className="text-blue-400">AI</span>
+            </span>
+            <span className="mt-1 block text-[10px] uppercase tracking-[0.2em] text-neutral-600">
+              Workspace
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-2 py-3 flex flex-col gap-0.5">
+      <nav className="flex flex-1 flex-col gap-1 px-3 py-4">
         {visibleItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
           return (
@@ -77,42 +80,45 @@ export function SidebarNav({ role, userEmail }: SidebarNavProps) {
               key={item.href}
               href={item.href}
               className={cn(
-                'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors',
+                'flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm transition-colors',
                 isActive
-                  ? 'bg-white/10 text-white'
-                  : 'text-neutral-400 hover:text-white hover:bg-white/5',
+                  ? 'bg-white/10 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]'
+                  : 'text-neutral-400 hover:bg-white/[0.04] hover:text-white',
               )}
             >
               {item.icon}
-              {item.label}
+              <span className="truncate">{item.label}</span>
             </Link>
           )
         })}
       </nav>
 
-      {/* User + logout */}
-      <div className="px-3 py-3 border-t border-white/5 flex flex-col gap-2">
-        <div className="flex items-center gap-2 px-2">
-          <div className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 text-[10px] font-bold flex items-center justify-center shrink-0">
-            <User className="w-3 h-3" />
+      <div className="border-t border-white/6 px-3 py-3">
+        <div className="rounded-xl border border-white/6 bg-white/[0.025] p-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-blue-300">
+              <User className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-xs text-neutral-200">{userEmail}</p>
+              <span className={cn('mt-1 inline-flex rounded px-1.5 py-0.5 text-[9px] font-semibold', roleConfig.className)}>
+                {roleConfig.label}
+              </span>
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="text-[11px] text-neutral-300 truncate">{userEmail}</p>
-            <span className={cn('text-[9px] px-1 rounded font-semibold', roleConfig.className)}>
-              {roleConfig.label}
-            </span>
+          <div className="mt-3 space-y-1">
+            <ChangePasswordForm />
+            <form action={logout}>
+              <button
+                type="submit"
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-neutral-500 transition-colors hover:bg-red-500/10 hover:text-red-300"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                Salir
+              </button>
+            </form>
           </div>
         </div>
-        <ChangePasswordForm />
-        <form action={logout}>
-          <button
-            type="submit"
-            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-neutral-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            Salir
-          </button>
-        </form>
       </div>
     </aside>
   )

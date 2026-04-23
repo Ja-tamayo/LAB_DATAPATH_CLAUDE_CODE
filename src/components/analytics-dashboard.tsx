@@ -958,15 +958,15 @@ function TeamTab({ teamTasks, teamActive, statusDist, priorityDist, teamDoneInPe
       .map(owner => ({ week: week.label, ...owner })),
   )
 
-  function actionSuggestion(task: Task, weekPct: number, ownerPct: number) {
+  function getSuggestionMeta(task: Task, weekPct: number, ownerPct: number) {
     const urgency = getUrgency(task)
     const effort = task.effort_tokens ?? 0
-    if (urgency === 'critical' || urgency === 'high') return 'Mantener'
-    if (ownerPct > 100 && effort >= 4) return 'Reasignar'
-    if (weekPct > 100 && effort >= 8) return 'Mover semana'
-    if (weekPct > 100 && effort >= 4) return 'Reasignar'
-    if (task.priority === 'low' || task.priority === 'medium') return 'Bajar prioridad'
-    return 'Mantener'
+    if (urgency === 'critical' || urgency === 'high') return { label: 'Mantener', reason: 'Alta urgencia', className: 'bg-green-500/15 text-green-300' }
+    if (ownerPct > 100 && effort >= 4) return { label: 'Reasignar', reason: 'Responsable saturado', className: 'bg-orange-500/15 text-orange-300' }
+    if (weekPct > 100 && effort >= 8) return { label: 'Mover semana', reason: 'Semana sobrecargada', className: 'bg-red-500/15 text-red-300' }
+    if (weekPct > 100 && effort >= 4) return { label: 'Reasignar', reason: 'Semana al limite', className: 'bg-orange-500/15 text-orange-300' }
+    if (task.priority === 'low' || task.priority === 'medium') return { label: 'Bajar prioridad', reason: 'Menor impacto', className: 'bg-blue-500/15 text-blue-300' }
+    return { label: 'Mantener', reason: 'Carga estable', className: 'bg-green-500/15 text-green-300' }
   }
 
   return (
@@ -1164,7 +1164,13 @@ function TeamTab({ teamTasks, teamActive, statusDist, priorityDist, teamDoneInPe
           <div className="mt-4 rounded-lg border border-white/8 bg-white/[0.015] overflow-hidden">
             <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-white/8">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Tareas proyectadas</p>
-              <span className="text-[10px] text-neutral-600">Ordenadas por esfuerzo para detectar rapido que mover</span>
+              <span className="text-[10px] text-neutral-600">La decision sale junto a la tarea y con su motivo para leerla mas rapido</span>
+            </div>
+            <div className="flex flex-wrap gap-2 px-4 py-3 border-b border-white/8 bg-white/[0.02]">
+              <span className="rounded border border-green-500/20 bg-green-500/10 px-2 py-1 text-[10px] text-green-300">Mantener: no conviene moverla</span>
+              <span className="rounded border border-orange-500/20 bg-orange-500/10 px-2 py-1 text-[10px] text-orange-300">Reasignar: otra persona puede absorberla mejor</span>
+              <span className="rounded border border-red-500/20 bg-red-500/10 px-2 py-1 text-[10px] text-red-300">Mover semana: saca presion del periodo</span>
+              <span className="rounded border border-blue-500/20 bg-blue-500/10 px-2 py-1 text-[10px] text-blue-300">Bajar prioridad: no deberia competir con lo urgente</span>
             </div>
             <div className="grid grid-cols-[110px_minmax(0,1.4fr)_120px_120px_72px_72px_110px] gap-3 px-4 py-2.5 border-b border-white/8 text-[10px] uppercase tracking-wider text-neutral-600">
               <span>Semana</span>
@@ -1184,8 +1190,9 @@ function TeamTab({ teamTasks, teamActive, statusDist, priorityDist, teamDoneInPe
                     .find(item => item.label === week.label)
                     ?.owners.find(owner => owner.userId === getExecutionOwnerId(task))
                     ?.pct ?? 0
-                  const suggestion = actionSuggestion(task, week.pct, ownerPct)
+                  const suggestion = getSuggestionMeta(task, week.pct, ownerPct)
                   const urgency = getUrgency(task)
+                  const ownerName = displayName(task.task_owner_id ?? task.user_id)
                   return (
                   <div
                     key={`${week.label}-${task.id}`}
@@ -1195,23 +1202,24 @@ function TeamTab({ teamTasks, teamActive, statusDist, priorityDist, teamDoneInPe
                     )}
                   >
                     <span className="text-neutral-500">{week.label}</span>
-                    <div className="min-w-0 flex items-center gap-2">
-                      <span className={cn('inline-block h-1.5 w-1.5 shrink-0 rounded-full', urgency === 'critical' ? 'bg-red-500' : urgency === 'high' ? 'bg-orange-400' : urgency === 'medium' ? 'bg-yellow-400' : 'bg-blue-400')} />
-                      <span className="truncate text-white">{task.title}</span>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={cn('inline-block h-1.5 w-1.5 shrink-0 rounded-full', urgency === 'critical' ? 'bg-red-500' : urgency === 'high' ? 'bg-orange-400' : urgency === 'medium' ? 'bg-yellow-400' : 'bg-blue-400')} />
+                        <span className="truncate text-white">{task.title}</span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px]">
+                        <span className={cn('rounded px-1 py-px font-semibold', PRIORITY_CONFIG[task.priority].className)}>{PRIORITY_CONFIG[task.priority].label}</span>
+                        <span className="text-neutral-600">Prop.: {ownerName}</span>
+                      </div>
                     </div>
                     <span className="truncate text-neutral-400">{displayName(getExecutionOwnerId(task))}</span>
-                    <span className="truncate text-neutral-500">{displayName(task.task_owner_id ?? task.user_id)}</span>
+                    <span className="truncate text-neutral-500">{ownerName}</span>
                     <span className={cn('w-fit rounded px-1 py-px text-[10px] font-semibold', PRIORITY_CONFIG[task.priority].className)}>{PRIORITY_CONFIG[task.priority].label}</span>
                     <span className={cn('text-right tabular-nums', week.pct > 100 ? 'text-red-200' : 'text-neutral-300')}>{task.effort_tokens ?? 0}t</span>
-                    <span className={cn(
-                      'w-fit rounded px-1.5 py-0.5 text-[10px] font-medium',
-                      suggestion === 'Mover semana' ? 'bg-red-500/15 text-red-300'
-                        : suggestion === 'Reasignar' ? 'bg-orange-500/15 text-orange-300'
-                        : suggestion === 'Bajar prioridad' ? 'bg-blue-500/15 text-blue-300'
-                        : 'bg-green-500/15 text-green-300',
-                    )}>
-                      {suggestion}
-                    </span>
+                    <div className="flex min-w-0 flex-col items-start gap-1">
+                      <span className={cn('w-fit rounded px-1.5 py-0.5 text-[10px] font-medium', suggestion.className)}>{suggestion.label}</span>
+                      <span className="text-[10px] text-neutral-500">{suggestion.reason}</span>
+                    </div>
                   </div>
                 )}),
               )}

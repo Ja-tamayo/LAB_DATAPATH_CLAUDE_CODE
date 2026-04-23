@@ -121,10 +121,33 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    @apply font-sans antialiased;
+    color-scheme: dark;
+  }
   body {
     @apply bg-background text-foreground;
+    background:
+      radial-gradient(circle at top, rgba(37, 99, 235, 0.08), transparent 28%),
+      linear-gradient(180deg, #10111b 0%, #0f1018 100%);
+    min-height: 100vh;
   }
-  html {
-    @apply font-sans;
+  ::selection {
+    background: rgba(59, 130, 246, 0.28);
+    color: #f8fafc;
+  }
+}
+
+@layer utilities {
+  .app-panel {
+    @apply rounded-xl border border-white/8 bg-white/[0.025];
+  }
+
+  .app-panel-header {
+    @apply border-b border-white/8 px-4 py-3;
+  }
+
+  .app-muted-label {
+    @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-500;
   }
 }

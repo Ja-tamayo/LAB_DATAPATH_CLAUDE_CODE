@@ -57,8 +57,11 @@ export default async function DashboardPage({
     <div className="flex flex-col h-full min-h-screen">
 
       {/* Page header */}
-      <header className="flex items-center justify-between px-4 py-2.5 border-b border-white/5 shrink-0">
-        <h1 className="text-sm font-medium text-neutral-300">Board</h1>
+      <header className="flex shrink-0 items-center justify-between border-b border-white/6 px-4 py-3">
+        <div>
+          <h1 className="text-base font-semibold text-white">Board</h1>
+          <p className="text-xs text-neutral-500">Vista operativa de tareas en curso</p>
+        </div>
         <div className="flex items-center gap-2">
           <ChatDrawer />
           <div className="w-px h-4 bg-white/10" />
@@ -82,7 +85,7 @@ export default async function DashboardPage({
       </Suspense>
 
       {/* Kanban board */}
-      <main className="flex-1 px-4 py-3 overflow-auto">
+      <main className="flex-1 overflow-auto px-4 py-4">
         <KanbanBoard
           initialTasks={tasks}
           role={role as UserRole}

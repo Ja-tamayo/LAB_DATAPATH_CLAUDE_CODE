@@ -17,29 +17,29 @@ export function ProfileSetupBanner() {
   }
 
   return (
-    <div className="mx-4 mt-3 p-3 bg-blue-500/8 border border-blue-500/20 rounded-lg flex items-center gap-3 flex-wrap">
-      <div className="flex-1 min-w-[140px]">
+    <div className="mx-4 mt-3 flex flex-wrap items-center gap-4 rounded-xl border border-blue-500/20 bg-blue-500/[0.08] px-4 py-3">
+      <div className="min-w-[180px] flex-1">
         <p className="text-xs font-medium text-blue-300">¿Cómo te llamas?</p>
-        <p className="text-[10px] text-neutral-500 mt-0.5">Agrega tu nombre para que el equipo pueda identificarte.</p>
+        <p className="mt-1 text-xs text-neutral-500">Agrega tu nombre para que el equipo pueda identificarte.</p>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex w-full items-center gap-2 sm:w-auto">
         <input
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSave()}
           placeholder="Nombre completo"
-          className="px-2.5 py-1.5 text-xs bg-white/5 border border-white/10 rounded-md text-white placeholder:text-neutral-600 focus:outline-none focus:border-blue-500/50 w-40"
+          className="h-10 w-full rounded-lg border border-white/10 bg-white/[0.05] px-3 text-sm text-white placeholder:text-neutral-600 focus:border-blue-500/50 focus:outline-none focus:ring-2 focus:ring-blue-500/20 sm:w-52"
         />
         <button
           onClick={handleSave}
           disabled={!name.trim() || pending}
-          className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-md transition-colors shrink-0"
+          className="h-10 shrink-0 rounded-lg bg-blue-600 px-4 text-sm text-white transition-colors hover:bg-blue-500 disabled:opacity-40"
         >
           {pending ? '…' : 'Guardar'}
         </button>
       </div>
-      {error && <p className="w-full text-[10px] text-red-400">{error}</p>}
+      {error && <p className="w-full text-xs text-red-400">{error}</p>}
     </div>
   )
 }

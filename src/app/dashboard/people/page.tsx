@@ -132,13 +132,15 @@ export default async function PeoplePage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="shrink-0 border-b border-white/5 px-4 py-2.5">
+      <header className="shrink-0 border-b border-white/6 px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-sm font-medium text-neutral-300">Personas &amp; Equipo</h1>
-            {isAdmin && <p className="text-[10px] text-neutral-600">Capacidad semanal y carga prevista de esta semana</p>}
+            <h1 className="text-base font-semibold text-white">Personas &amp; Equipo</h1>
+            <p className="text-xs text-neutral-500">
+              {isAdmin ? 'Capacidad semanal, acceso y carga prevista de esta semana' : 'Visibilidad del equipo y su carga semanal'}
+            </p>
           </div>
-          <p className="text-[10px] text-neutral-600">{users.length} miembro{users.length !== 1 ? 's' : ''}</p>
+          <p className="text-xs text-neutral-600">{users.length} miembro{users.length !== 1 ? 's' : ''}</p>
         </div>
       </header>
 

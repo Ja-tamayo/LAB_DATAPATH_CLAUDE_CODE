@@ -19,16 +19,25 @@ export default async function OperationalPage() {
     getClientsWithProjects().catch(() => [] as Awaited<ReturnType<typeof getClientsWithProjects>>),
   ])
 
-  const { data: myProfile } = await supabase.from('profiles').select('weekly_capacity_tokens').eq('id', user.id).single()
-  const myCapacity   = (myProfile?.weekly_capacity_tokens as number) ?? 40
+  const { data: myProfile } = await supabase
+    .from('profiles')
+    .select('weekly_capacity_tokens')
+    .eq('id', user.id)
+    .single()
+
+  const myCapacity = (myProfile?.weekly_capacity_tokens as number) ?? 40
   const isPrivileged = role === 'leader' || role === 'admin_system'
 
   return (
-    <div className="flex flex-col h-full min-h-screen">
-      <header className="flex items-center justify-between px-4 py-2.5 border-b border-white/5 shrink-0">
-        <h1 className="text-sm font-medium text-neutral-300">Analítica</h1>
-        <p className="text-[10px] text-neutral-600">{allTasks.length} tareas totales</p>
+    <div className="flex min-h-screen flex-col">
+      <header className="flex shrink-0 items-center justify-between border-b border-white/6 px-4 py-3">
+        <div>
+          <h1 className="text-base font-semibold text-white">Analítica</h1>
+          <p className="text-xs text-neutral-500">Carga, riesgos y proyección operativa</p>
+        </div>
+        <p className="text-xs text-neutral-600">{allTasks.length} tareas totales</p>
       </header>
+
       <AnalyticsDashboard
         tasks={allTasks}
         users={users}

@@ -17,10 +17,10 @@ interface FilterBarProps {
 }
 
 const selectClass = cn(
-  'bg-transparent border border-white/10 rounded-md text-[11px] text-neutral-400',
-  'px-2 py-1 appearance-none cursor-pointer',
-  'hover:border-white/20 hover:text-neutral-200 transition-colors',
-  'focus:outline-none focus:border-blue-500/40',
+  'min-h-8 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-neutral-300',
+  'appearance-none cursor-pointer transition-colors',
+  'hover:border-white/20 hover:bg-white/[0.05] hover:text-white',
+  'focus:outline-none focus:border-blue-500/40 focus:ring-2 focus:ring-blue-500/20',
   '[&>option]:bg-[#1a1a2e]',
 )
 
@@ -56,7 +56,7 @@ export function FilterBar({ role, users, currentUserId }: FilterBarProps) {
   const v = (key: string) => searchParams.get(key) ?? ''
 
   return (
-    <div className="flex items-center gap-1.5 px-4 py-1.5 border-b border-white/5 flex-wrap bg-[#0a0a14]/40 min-h-[36px]">
+    <div className="flex min-h-[52px] flex-wrap items-center gap-2 border-b border-white/6 bg-[#0b0c15]/55 px-4 py-2.5 backdrop-blur">
 
       {/* ── People filters (leader/admin only) ── */}
       {canSeeTeam && users.length > 0 && (
@@ -131,10 +131,10 @@ export function FilterBar({ role, users, currentUserId }: FilterBarProps) {
       <button
         onClick={() => setParam('overdue', v('overdue') === '1' ? null : '1')}
         className={cn(
-          'text-[11px] px-2 py-1 rounded-md border transition-colors',
+          'rounded-lg border px-2.5 py-1.5 text-xs transition-colors',
           v('overdue') === '1'
             ? 'bg-red-500/15 border-red-500/30 text-red-300'
-            : 'border-white/10 text-neutral-500 hover:text-neutral-300 hover:border-white/20',
+            : 'border-white/10 bg-white/[0.03] text-neutral-400 hover:border-white/20 hover:text-neutral-200',
         )}
       >
         ⚠ Vencidas
@@ -143,7 +143,7 @@ export function FilterBar({ role, users, currentUserId }: FilterBarProps) {
       {activeCount > 0 && (
         <button
           onClick={clearAll}
-          className="flex items-center gap-1 text-[11px] text-neutral-600 hover:text-white transition-colors ml-1"
+          className="ml-1 inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-neutral-500 transition-colors hover:bg-white/[0.04] hover:text-white"
         >
           <X className="w-3 h-3" />
           Limpiar {activeCount > 0 && `(${activeCount})`}
