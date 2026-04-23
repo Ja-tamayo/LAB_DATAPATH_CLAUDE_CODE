@@ -478,7 +478,7 @@ export function AnalyticsDashboard({ tasks, users, registeredClients = [], curre
             doneTokens:  pTasks.filter(t => t.status === 'done').reduce((s, t) => s + (t.effort_tokens ?? 0), 0),
             overdue:     pTasks.filter(t => t.status !== 'done' && t.due_date && t.due_date < todayStr).length,
           }))
-          .sort((a, b) => b.estimTokens - a.estimTokens)
+          .sort((a, b) => (b.estimTokens + b.doneTokens) - (a.estimTokens + a.doneTokens))
 
         const singleNoProject = projects.length === 1 && projects[0].project === '(Sin proyecto)'
         return {
@@ -1241,9 +1241,9 @@ function ClientsTab({ clientStats, tasks, expandedClients, setExpandedClients, p
   expandedClients: Set<string>; setExpandedClients: (fn: (p: Set<string>) => Set<string>) => void
   periodLabel?: string
 }) {
-  const totalEstim = clientStats.reduce((s, c) => s + c.estimTokens, 0)
-  const totalDone  = clientStats.reduce((s, c) => s + c.doneTokens,  0)
-  const realClients = clientStats.filter(c => c.client !== '(Sin cliente)')
+  const totalPlanned = clientStats.reduce((s, c) => s + c.estimTokens + c.doneTokens, 0)
+  const totalDone    = clientStats.reduce((s, c) => s + c.doneTokens, 0)
+  const realClients  = clientStats.filter(c => c.client !== '(Sin cliente)')
   const noClientCount = tasks.filter(t => t.status !== 'done' && !t.client).length
 
   function toggleClient(client: string) {
@@ -1255,7 +1255,7 @@ function ClientsTab({ clientStats, tasks, expandedClients, setExpandedClients, p
       <div className="flex items-center gap-5 px-5 py-3 bg-white/[0.025] border border-white/8 rounded-xl flex-wrap">
         <StatCell label="Clientes activos"    value={realClients.length} />
         <Divider />
-        <StatCell label="Inversión prevista" sub={periodLabel} value={`${tokensToHours(totalEstim).toFixed(0)}h`} accent="yellow" />
+        <StatCell label="Inversión del periodo" sub={periodLabel} value={`${tokensToHours(totalPlanned).toFixed(0)}h`} accent="yellow" />
         <Divider />
         <StatCell label="Horas cerradas" sub={periodLabel} value={`${tokensToHours(totalDone).toFixed(0)}h`} accent="green" />
         <Divider />
