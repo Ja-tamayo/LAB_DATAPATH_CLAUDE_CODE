@@ -56,6 +56,18 @@ function inPeriod(dateStr: string | null | undefined, ps: Date | null, pe?: Date
   return true
 }
 
+// Active task relevance: always show overdue + tasks due within period + no-due-date tasks
+// Done tasks: only if completed_at falls in the period
+function inOrBeforePeriod(task: Task, ps: Date | null, pe: Date | null): boolean {
+  if (!ps && !pe) return true
+  if (task.status === 'done') return inPeriod(task.completed_at, ps, pe)
+  if (!task.due_date) return true          // floating tasks always visible
+  const due = new Date(task.due_date)
+  if (ps && due < ps) return true          // overdue — always keep visible
+  if (pe && due > pe) return false         // due after period end — hide
+  return true
+}
+
 // ── UI atoms ──────────────────────────────────────────────────────────────────
 
 function Divider() { return <span className="w-px h-6 bg-white/8 shrink-0" /> }
@@ -146,7 +158,12 @@ export function AnalyticsDashboard({ tasks, users, registeredClients = [], curre
   const now      = useMemo(() => new Date(), [])
   const todayStr = useMemo(() => now.toISOString().split('T')[0], [now])
   const ps       = useMemo(() => getPeriodStart(period, customFrom), [period, customFrom])
-  const pe       = useMemo(() => period === 'custom' && customTo ? new Date(customTo + 'T23:59:59') : null, [period, customTo])
+  const pe       = useMemo(() => {
+    if (period === 'all') return null
+    if (period === 'custom') return customTo ? new Date(customTo + 'T23:59:59') : null
+    // For standard periods: no upper bound (show everything from ps up to and including future due dates)
+    return null
+  }, [period, customTo])
   const periodLabel = period === 'custom'
     ? (customFrom || customTo) ? `${customFrom || '…'} → ${customTo || '…'}` : 'Rango personalizado'
     : PERIODS.find(p => p.key === period)?.label
@@ -158,8 +175,14 @@ export function AnalyticsDashboard({ tasks, users, registeredClients = [], curre
       : tasks.filter(t => t.assigned_to === selectedUser || t.task_owner_id === selectedUser || t.user_id === selectedUser),
   [tasks, selectedUser])
 
+  // Period-filtered slice used by Team + Clients tabs (active tasks pruned by due_date)
+  const periodTasks = useMemo(() =>
+    (!ps && !pe) ? scopedTasks : scopedTasks.filter(t => inOrBeforePeriod(t, ps, pe)),
+  [scopedTasks, ps, pe])
+
   // ── MY LOAD ────────────────────────────────────────────────────────────────
 
+  // Active tasks always show in full (never hide overdue tasks from your own queue)
   const myTasks   = useMemo(() => tasks.filter(t => t.assigned_to === currentUserId || t.task_owner_id === currentUserId || t.user_id === currentUserId), [tasks, currentUserId])
   const myActive  = useMemo(() => myTasks.filter(t => t.status !== 'done'), [myTasks])
   const myIP      = useMemo(() => myTasks.filter(t => t.status === 'in_progress'), [myTasks])
@@ -184,9 +207,9 @@ export function AnalyticsDashboard({ tasks, users, registeredClients = [], curre
   const noDate   = useMemo(() => myActive.filter(t => !t.due_date).length, [myActive])
   const noTokens = useMemo(() => myActive.filter(t => !t.effort_tokens).length, [myActive])
 
-  // ── TEAM ───────────────────────────────────────────────────────────────────
+  // ── TEAM (period-filtered) ──────────────────────────────────────────────────
 
-  const teamTasks  = scopedTasks
+  const teamTasks  = periodTasks
   const teamActive = useMemo(() => teamTasks.filter(t => t.status !== 'done'), [teamTasks])
 
   const statusDist = useMemo(() => ({
@@ -201,7 +224,7 @@ export function AnalyticsDashboard({ tasks, users, registeredClients = [], curre
     return d
   }, [teamActive])
 
-  const teamDoneInPeriod = useMemo(() => teamTasks.filter(t => t.status === 'done' && inPeriod(t.completed_at, ps, pe)).length, [teamTasks, ps, pe])
+  const teamDoneInPeriod = useMemo(() => teamTasks.filter(t => t.status === 'done').length, [teamTasks])
 
   type UserLoad = { userId: string; activeTasks: number; inProgress: number; tokensIP: number; tokensDone: number; capacity: number; overdue: number }
   const workload = useMemo(() => {
@@ -215,12 +238,12 @@ export function AnalyticsDashboard({ tasks, users, registeredClients = [], curre
         e.activeTasks++
         if (t.status === 'in_progress') { e.inProgress++; e.tokensIP += t.effort_tokens ?? 0 }
         if (t.due_date && t.due_date < todayStr) e.overdue++
-      } else if (inPeriod(t.completed_at, ps, pe)) {
+      } else {
         e.tokensDone += t.effort_tokens ?? 0
       }
     }
     return [...map.values()].sort((a, b) => b.activeTasks - a.activeTasks)
-  }, [teamTasks, users, todayStr, ps, pe])
+  }, [teamTasks, users, todayStr])
 
   const overloadedN = useMemo(() => workload.filter(w => w.capacity > 0 && w.tokensIP > w.capacity).length, [workload])
 
@@ -237,7 +260,7 @@ export function AnalyticsDashboard({ tasks, users, registeredClients = [], curre
       if (rc.status === 'active') clientMap.set(rc.name, [])
     }
 
-    for (const t of scopedTasks) {
+    for (const t of periodTasks) {
       const key = t.client ?? '§'
       if (!clientMap.has(key)) clientMap.set(key, [])
       clientMap.get(key)!.push(t)
@@ -264,9 +287,9 @@ export function AnalyticsDashboard({ tasks, users, registeredClients = [], curre
             project:     projKey === '§' ? '(Sin proyecto)' : projKey,
             tasks:       pTasks,
             active:      pTasks.filter(t => t.status !== 'done').length,
-            done:        pTasks.filter(t => t.status === 'done' && inPeriod(t.completed_at, ps, pe)).length,
+            done:        pTasks.filter(t => t.status === 'done').length,
             estimTokens: pTasks.filter(t => t.status !== 'done').reduce((s, t) => s + (t.effort_tokens ?? 0), 0),
-            doneTokens:  pTasks.filter(t => t.status === 'done' && inPeriod(t.completed_at, ps, pe)).reduce((s, t) => s + (t.effort_tokens ?? 0), 0),
+            doneTokens:  pTasks.filter(t => t.status === 'done').reduce((s, t) => s + (t.effort_tokens ?? 0), 0),
             overdue:     pTasks.filter(t => t.status !== 'done' && t.due_date && t.due_date < todayStr).length,
           }))
           .sort((a, b) => b.estimTokens - a.estimTokens)
@@ -277,9 +300,9 @@ export function AnalyticsDashboard({ tasks, users, registeredClients = [], curre
           tasks:       cTasks,
           projects:    singleNoProject ? [] : projects,
           active:      cTasks.filter(t => t.status !== 'done').length,
-          done:        cTasks.filter(t => t.status === 'done' && inPeriod(t.completed_at, ps, pe)).length,
+          done:        cTasks.filter(t => t.status === 'done').length,
           estimTokens: cTasks.filter(t => t.status !== 'done').reduce((s, t) => s + (t.effort_tokens ?? 0), 0),
-          doneTokens:  cTasks.filter(t => t.status === 'done' && inPeriod(t.completed_at, ps, pe)).reduce((s, t) => s + (t.effort_tokens ?? 0), 0),
+          doneTokens:  cTasks.filter(t => t.status === 'done').reduce((s, t) => s + (t.effort_tokens ?? 0), 0),
           overdue:     cTasks.filter(t => t.status !== 'done' && t.due_date && t.due_date < todayStr).length,
         }
       })
@@ -288,7 +311,7 @@ export function AnalyticsDashboard({ tasks, users, registeredClients = [], curre
         if (b.client === '(Sin cliente)') return -1
         return (b.estimTokens + b.doneTokens) - (a.estimTokens + a.doneTokens)
       })
-  }, [scopedTasks, registeredClients, ps, pe, todayStr])
+  }, [periodTasks, registeredClients, todayStr])
 
   // ── RISKS ──────────────────────────────────────────────────────────────────
 
@@ -380,8 +403,12 @@ export function AnalyticsDashboard({ tasks, users, registeredClients = [], curre
           </select>
         )}
 
-        <span className="text-xs text-neutral-700 ml-auto">
-          {scopedTasks.length} tarea{scopedTasks.length !== 1 ? 's' : ''} visibles
+        <span className="text-xs text-neutral-600 ml-auto tabular-nums">
+          {periodTasks.length}
+          {periodTasks.length !== scopedTasks.length && (
+            <span className="text-neutral-700"> / {scopedTasks.length}</span>
+          )}
+          {' '}tarea{periodTasks.length !== 1 ? 's' : ''}
         </span>
       </div>
 
