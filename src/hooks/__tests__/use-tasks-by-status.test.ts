@@ -20,6 +20,8 @@ function makeTask(overrides: Partial<Task>): Task {
     estimated_start_date: null,
     started_at: null,
     completed_at: null,
+    client: null,
+    project: null,
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z',
     ...overrides,

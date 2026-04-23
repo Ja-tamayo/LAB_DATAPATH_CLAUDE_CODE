@@ -40,9 +40,13 @@ export function AnalyticsTabs({ isPrivileged, myLoad, team, risks }: AnalyticsTa
         ))}
       </div>
       <div className="flex-1 overflow-auto p-4">
-        {active === 'my_load' && myLoad}
-        {active === 'team'    && isPrivileged && team}
-        {active === 'risks'   && isPrivileged && risks}
+        {active === 'my_load'
+          ? myLoad
+          : active === 'team' && isPrivileged
+            ? team
+            : isPrivileged
+              ? risks
+              : null}
       </div>
     </div>
   )

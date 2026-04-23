@@ -20,6 +20,8 @@ export interface Task {
   estimated_start_date: string | null
   started_at: string | null
   completed_at: string | null
+  client: string | null
+  project: string | null
   created_at: string
   updated_at: string
 }

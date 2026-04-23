@@ -4,6 +4,7 @@ import { useState, useId } from 'react'
 import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core'
 import { type Task, type UserRole, KANBAN_COLUMNS } from '@/types/tasks'
 import { type UserOption } from '@/actions/users'
+import { type ClientOption } from '@/actions/clients'
 import { useMoveTask } from '@/hooks/use-move-task'
 import { useTasksByStatus } from '@/hooks/use-tasks-by-status'
 import { useKanbanDnd } from '@/hooks/use-kanban-dnd'
@@ -15,6 +16,7 @@ interface KanbanBoardProps {
   initialTasks: Task[]
   role?: UserRole
   users?: UserOption[]
+  clients?: ClientOption[]
   currentUserId?: string
 }
 
@@ -22,6 +24,7 @@ export function KanbanBoard({
   initialTasks,
   role = 'collaborator',
   users = [],
+  clients = [],
   currentUserId = '',
 }: KanbanBoardProps) {
   const dndId = useId()
@@ -64,6 +67,7 @@ export function KanbanBoard({
           task={selectedTask}
           role={role}
           users={users}
+          clients={clients}
           currentUserId={currentUserId}
           onClose={() => setSelectedTask(null)}
           onChanged={() => setSelectedTask(null)}

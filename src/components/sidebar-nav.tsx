@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutGrid, BarChart2, Users, LogOut, User } from 'lucide-react'
+import { LayoutGrid, BarChart2, Users, Briefcase, LogOut, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { logout } from '@/actions/auth'
 import { type UserRole, ROLE_CONFIG } from '@/types/tasks'
@@ -37,6 +37,12 @@ const NAV_ITEMS: NavItem[] = [
     icon:  <Users className="w-4 h-4" />,
     roles: ['leader', 'admin_system'],
   },
+  {
+    href:  '/dashboard/clients',
+    label: 'Clientes',
+    icon:  <Briefcase className="w-4 h-4" />,
+    roles: ['leader', 'admin_system'],
+  },
 ]
 
 export function SidebarNav({ role, userEmail }: SidebarNavProps) {
@@ -65,7 +71,7 @@ export function SidebarNav({ role, userEmail }: SidebarNavProps) {
       {/* Navigation */}
       <nav className="flex-1 px-2 py-3 flex flex-col gap-0.5">
         {visibleItems.map((item) => {
-          const isActive = pathname === item.href
+          const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
           return (
             <Link
               key={item.href}

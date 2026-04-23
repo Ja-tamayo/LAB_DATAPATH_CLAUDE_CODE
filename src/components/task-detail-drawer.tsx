@@ -10,6 +10,7 @@ import {
   tokensToHours, getUrgency,
 } from '@/types/tasks'
 import { type UserOption } from '@/actions/users'
+import { type ClientOption } from '@/actions/clients'
 import { Input } from '@/components/ui/input'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -19,6 +20,7 @@ interface TaskDetailDrawerProps {
   task: Task | null
   role: UserRole
   users: UserOption[]
+  clients?: ClientOption[]
   currentUserId: string
   onClose: () => void
   onChanged: () => void
@@ -77,7 +79,7 @@ function UserBadge({ userId, users, label }: { userId: string | null; users: Use
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function TaskDetailDrawer({
-  task, role, users, currentUserId, onClose, onChanged,
+  task, role, users, clients = [], currentUserId, onClose, onChanged,
 }: TaskDetailDrawerProps) {
   const canEdit =
     role === 'admin_system' ||
@@ -99,6 +101,8 @@ export function TaskDetailDrawer({
   const [estStart, setEstStart]         = useState(task?.estimated_start_date?.slice(0, 10) ?? '')
   const [assignedTo, setAssignedTo]     = useState(task?.assigned_to ?? '')
   const [taskOwner, setTaskOwner]       = useState(task?.task_owner_id ?? '')
+  const [client, setClient]             = useState(task?.client ?? '')
+  const [project, setProject]           = useState(task?.project ?? '')
   const [isPending, startTransition]    = useTransition()
   const [error, setError]               = useState<string | null>(null)
 
@@ -123,6 +127,8 @@ export function TaskDetailDrawer({
         estimated_start_date: estStart || null,
         assigned_to:         isLeaderOrAdmin ? assignedTo || null : undefined,
         task_owner_id:       isLeaderOrAdmin ? taskOwner  || null : undefined,
+        client:              client.trim() || null,
+        project:             project.trim() || null,
       })
       if (result.error) { setError(result.error); return }
       onChanged()
@@ -198,6 +204,76 @@ export function TaskDetailDrawer({
                 <p className="text-xs text-neutral-400">{task.description ?? '—'}</p>
               )}
             </Field>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Cliente">
+                {canEdit && clients.length > 0 ? (() => {
+                  const allOpts = clients.filter(c => c.status === 'active')
+                  const hasExtra = client && !allOpts.find(c => c.name === client)
+                  return (
+                    <Select value={client || '__none__'} onValueChange={val => { setClient(val === '__none__' ? '' : val); setProject('') }}>
+                      <SelectTrigger className="bg-white/5 border-white/10 text-white text-xs h-8">
+                        <SelectValue placeholder="—" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-[#1a1a2e] border-white/10 text-white z-[60]">
+                        <SelectItem value="__none__" className="text-neutral-500 focus:bg-white/10 text-xs">Sin cliente</SelectItem>
+                        {hasExtra && <SelectItem value={client} className="text-teal-400 focus:bg-white/10 text-xs">{client}</SelectItem>}
+                        {allOpts.map(c => (
+                          <SelectItem key={c.id} value={c.name} className="text-white focus:bg-white/10 text-xs">{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )
+                })() : canEdit ? (
+                  <Input
+                    value={client}
+                    onChange={e => setClient(e.target.value)}
+                    placeholder="—"
+                    className="bg-white/5 border-white/10 text-white text-xs h-8"
+                  />
+                ) : (
+                  <ReadValue>{task.client ?? '—'}</ReadValue>
+                )}
+              </Field>
+              <Field label="Proyecto">
+                {canEdit && clients.length > 0 ? (() => {
+                  const selectedClient = clients.find(c => c.name === client)
+                  const projs = selectedClient?.projects.filter(p => p.status === 'active') ?? []
+                  const hasExtra = project && !projs.find(p => p.name === project)
+                  return projs.length > 0 || hasExtra ? (
+                    <Select value={project || '__none__'} onValueChange={val => setProject(val === '__none__' ? '' : val)}>
+                      <SelectTrigger className="bg-white/5 border-white/10 text-white text-xs h-8">
+                        <SelectValue placeholder="—" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-[#1a1a2e] border-white/10 text-white z-[60]">
+                        <SelectItem value="__none__" className="text-neutral-500 focus:bg-white/10 text-xs">Sin proyecto</SelectItem>
+                        {hasExtra && <SelectItem value={project} className="text-indigo-400 focus:bg-white/10 text-xs">{project}</SelectItem>}
+                        {projs.map(p => (
+                          <SelectItem key={p.id} value={p.name} className="text-white focus:bg-white/10 text-xs">{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      value={project}
+                      onChange={e => setProject(e.target.value)}
+                      placeholder={client ? '—' : 'Selecciona cliente'}
+                      disabled={!client}
+                      className="bg-white/5 border-white/10 text-white text-xs h-8 disabled:opacity-40"
+                    />
+                  )
+                })() : canEdit ? (
+                  <Input
+                    value={project}
+                    onChange={e => setProject(e.target.value)}
+                    placeholder="—"
+                    className="bg-white/5 border-white/10 text-white text-xs h-8"
+                  />
+                ) : (
+                  <ReadValue>{task.project ?? '—'}</ReadValue>
+                )}
+              </Field>
+            </div>
           </Block>
 
           {/* ── 2. Clasificación ─────────────────────────────────────────── */}

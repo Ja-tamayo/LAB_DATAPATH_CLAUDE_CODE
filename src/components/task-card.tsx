@@ -80,6 +80,22 @@ export function TaskCard({ task, isDragging = false, onClick }: TaskCardProps) {
           </p>
         )}
 
+        {/* Client / project pills */}
+        {(task.client || task.project) && (
+          <div className="flex items-center gap-1 mt-1 flex-wrap">
+            {task.client && (
+              <span className="px-1 py-px rounded text-[9px] bg-teal-500/15 text-teal-400 font-medium truncate max-w-[80px]">
+                {task.client}
+              </span>
+            )}
+            {task.project && (
+              <span className="px-1 py-px rounded text-[9px] bg-indigo-500/15 text-indigo-400 font-medium truncate max-w-[80px]">
+                {task.project}
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Footer meta */}
         <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
           {task.due_date && (

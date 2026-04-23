@@ -87,13 +87,13 @@ export default async function PeoplePage() {
         <p className="text-[10px] text-neutral-600">{users.length} miembro{users.length !== 1 ? 's' : ''}</p>
       </header>
 
-      <main className="flex-1 p-4 max-w-4xl mx-auto w-full">
+      <main className="flex-1 p-4 w-full">
         {stats.length === 0 ? (
           <p className="text-xs text-neutral-600 mt-8 text-center">No hay miembros del equipo aún.</p>
         ) : (
           <>
             {/* Column headers */}
-            <div className="grid grid-cols-[200px_80px_100px_100px_100px_1fr] gap-3 px-3 mb-1.5 text-[9px] uppercase tracking-wider text-neutral-600">
+            <div className="grid grid-cols-[220px_80px_120px_120px_120px_1fr] gap-3 px-3 mb-1.5 text-[9px] uppercase tracking-wider text-neutral-600">
               <span>Miembro</span>
               <span className="text-right">Activas</span>
               <span className="text-right">Tokens act.</span>
@@ -111,7 +111,7 @@ export default async function PeoplePage() {
                 return (
                   <div
                     key={s.user.id}
-                    className="bg-white/[0.03] border border-white/8 rounded-xl px-3 py-3 grid grid-cols-[200px_80px_100px_100px_100px_1fr] gap-3 items-center"
+                    className="bg-white/[0.03] border border-white/8 rounded-xl px-3 py-3 grid grid-cols-[220px_80px_120px_120px_120px_1fr] gap-3 items-center"
                   >
                     {/* Identity */}
                     <div className="flex items-center gap-2.5 min-w-0">

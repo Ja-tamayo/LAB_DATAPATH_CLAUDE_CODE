@@ -4,7 +4,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
 import { searchTasks } from '@/actions/search'
 import { createTask, updateTaskStatus } from '@/actions/tasks'
-import { type Task, type TaskStatus, type TaskPriority } from '@/types/tasks'
+import { type Task, type TaskStatus, type TaskPriority, getUrgency } from '@/types/tasks'
 
 export interface ChatMessage {
   role: 'user' | 'assistant'
@@ -30,6 +30,8 @@ const TOOLS: Anthropic.Tool[] = [
         title:       { type: 'string', description: 'Título de la tarea' },
         priority:    { type: 'string', enum: ['low', 'medium', 'high', 'critical'], description: 'Prioridad: low=baja, medium=media, high=alta, critical=crítica' },
         description: { type: 'string', description: 'Descripción opcional' },
+        client:      { type: 'string', description: 'Cliente al que pertenece la tarea (opcional)' },
+        project:     { type: 'string', description: 'Proyecto al que pertenece la tarea (opcional)' },
       },
       required: ['title', 'priority'],
     },
@@ -48,11 +50,18 @@ const TOOLS: Anthropic.Tool[] = [
   },
 ]
 
-function formatTask(task: Task): string {
+function formatTask(task: Task, nameMap: Map<string, string>): string {
   const parts = [`"${task.title}"`]
+  if (task.client)      parts.push(`[${task.client}${task.project ? '/' + task.project : ''}]`)
   if (task.description) parts.push(`(${task.description})`)
-  parts.push(`| estado: ${task.status}`, `prioridad: ${task.priority}`)
+  parts.push(`| estado: ${task.status}`, `| prioridad: ${task.priority}`)
+  const urgency = getUrgency(task)
+  if (urgency === 'critical' || urgency === 'high') parts.push(`| urgencia: ${urgency}`)
   if (task.due_date) parts.push(`| vence: ${task.due_date}`)
+  if (task.effort_tokens) parts.push(`| esfuerzo: ${task.effort_tokens} tokens`)
+  if (task.assigned_to) parts.push(`| ejecuta: ${nameMap.get(task.assigned_to) ?? task.assigned_to.slice(0, 8)}`)
+  if (task.task_owner_id && task.task_owner_id !== task.assigned_to)
+    parts.push(`| propietario: ${nameMap.get(task.task_owner_id) ?? task.task_owner_id.slice(0, 8)}`)
   return parts.join(' ')
 }
 
@@ -64,13 +73,21 @@ export async function chatWithTasks(messages: ChatMessage[]): Promise<ChatRespon
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Usuario no autenticado')
 
+  // Fetch all tasks visible to the user (RLS handles access by role)
   const { data: allTasks } = await supabase
     .from('tasks')
     .select('*')
-    .eq('user_id', user.id)
     .order('position')
 
   const tasks = (allTasks ?? []) as Task[]
+
+  // Build name map from profiles for better context
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, full_name')
+  const nameMap = new Map<string, string>(
+    (profiles ?? []).filter((p) => p.full_name).map((p) => [p.id as string, p.full_name as string]),
+  )
 
   let ragContext = ''
   try {
@@ -82,41 +99,60 @@ export async function chatWithTasks(messages: ChatMessage[]): Promise<ChatRespon
     // RAG falla silenciosamente — continúa con contexto completo
   }
 
+  const myTasks   = tasks.filter((t) => t.assigned_to === user.id || t.user_id === user.id)
+  const teamTasks = tasks.filter((t) => t.assigned_to !== user.id && t.user_id !== user.id)
+
   const byStatus = {
     todo:        tasks.filter((t) => t.status === 'todo'),
     in_progress: tasks.filter((t) => t.status === 'in_progress'),
     done:        tasks.filter((t) => t.status === 'done'),
   }
 
+  // Client / project groupings for team context
+  const clients  = [...new Set(tasks.map((t) => t.client).filter(Boolean))]
+  const projects = [...new Set(tasks.map((t) => t.project).filter(Boolean))]
+
+  // Overdue and urgent tasks for risk context
+  const today = new Date().toISOString().split('T')[0]
+  const overdue = tasks.filter((t) => t.status !== 'done' && t.due_date && t.due_date < today)
+
   const taskListForTools = tasks
-    .map((t) => `ID: ${t.id} | Título: "${t.title}" | Estado: ${t.status} | Prioridad: ${t.priority}`)
+    .map((t) => `ID: ${t.id} | "${t.title}" | ${t.status} | ${t.priority}${t.client ? ' | cliente: ' + t.client : ''}${t.project ? ' | proyecto: ' + t.project : ''}`)
     .join('\n')
 
+  const myName = nameMap.get(user.id) ?? user.email ?? 'yo'
+
   const fullContext = [
-    `Total de tareas: ${tasks.length}`,
+    `Usuario actual: ${myName} (${user.email})`,
+    `Total de tareas visibles: ${tasks.length} (mías: ${myTasks.length}, equipo: ${teamTasks.length})`,
+    clients.length > 0  ? `Clientes activos: ${clients.join(', ')}` : '',
+    projects.length > 0 ? `Proyectos activos: ${projects.join(', ')}` : '',
+    overdue.length > 0  ? `Tareas vencidas: ${overdue.length}` : '',
+    '\n— MIS TAREAS —',
     byStatus.todo.length > 0
-      ? `\nPor hacer (${byStatus.todo.length}):\n${byStatus.todo.map(formatTask).join('\n')}`
-      : '\nPor hacer: ninguna',
+      ? `Por hacer (${byStatus.todo.length}):\n${byStatus.todo.filter(t => t.assigned_to === user.id || t.user_id === user.id).map((t) => formatTask(t, nameMap)).join('\n')}`
+      : 'Por hacer: ninguna',
     byStatus.in_progress.length > 0
-      ? `\nEn progreso (${byStatus.in_progress.length}):\n${byStatus.in_progress.map(formatTask).join('\n')}`
-      : '\nEn progreso: ninguna',
-    byStatus.done.length > 0
-      ? `\nTerminadas (${byStatus.done.length}):\n${byStatus.done.map(formatTask).join('\n')}`
-      : '\nTerminadas: ninguna',
+      ? `En progreso (${byStatus.in_progress.filter(t => t.assigned_to === user.id || t.user_id === user.id).length}):\n${byStatus.in_progress.filter(t => t.assigned_to === user.id || t.user_id === user.id).map((t) => formatTask(t, nameMap)).join('\n')}`
+      : 'En progreso: ninguna',
+    teamTasks.length > 0
+      ? `\n— TAREAS DEL EQUIPO (${teamTasks.length}) —\n${teamTasks.filter(t => t.status !== 'done').map((t) => formatTask(t, nameMap)).join('\n')}`
+      : '',
     ragContext,
-    tasks.length > 0 ? `\nLista de IDs (para usar en herramientas):\n${taskListForTools}` : '',
-  ].join('')
+    tasks.length > 0 ? `\n— IDs (para herramientas) —\n${taskListForTools}` : '',
+  ].filter(Boolean).join('\n')
 
   const systemPrompt = `Eres un asistente de productividad integrado en TaskFlow AI. Responde en español.
+Actúas como un jefe de proyecto senior que conoce el estado completo del equipo.
 
-REGLAS DE USO DE HERRAMIENTAS (obligatorias):
-- Si el usuario pide CREAR, AGREGAR o AÑADIR una tarea → llama SIEMPRE a create_task. No respondas con texto antes de llamarla.
-- Si el usuario pide MOVER, CAMBIAR ESTADO o MARCAR como terminada/progreso → llama SIEMPRE a move_task usando el ID exacto de la lista.
+REGLAS DE HERRAMIENTAS (obligatorias):
+- Si el usuario pide CREAR, AGREGAR o AÑADIR una tarea → llama SIEMPRE a create_task. Extrae cliente y proyecto del contexto si se mencionan.
+- Si el usuario pide MOVER, CAMBIAR ESTADO o MARCAR como terminada/progreso → llama SIEMPRE a move_task con el ID exacto.
 - Solo responde con texto cuando NO haya una acción que ejecutar.
 
-Prioridad por defecto si no se especifica: medium.
+Prioridad por defecto: medium. Si el usuario menciona un cliente o proyecto conocido, inclúyelo en create_task.
 
-Tareas actuales del usuario:
+Contexto del equipo:
 ${fullContext}`
 
   const apiMessages: Anthropic.MessageParam[] = messages.map((m) => ({
@@ -150,8 +186,8 @@ ${fullContext}`
     console.log('[chat] tool_use →', block.name, JSON.stringify(block.input))
 
     if (block.name === 'create_task') {
-      const input = block.input as { title: string; priority: TaskPriority; description?: string }
-      const result = await createTask(input.title, input.priority, input.description)
+      const input = block.input as { title: string; priority: TaskPriority; description?: string; client?: string; project?: string }
+      const result = await createTask(input.title, input.priority, input.description, undefined, undefined, input.client, input.project)
       console.log('[chat] createTask result:', result)
       toolResults.push({
         type: 'tool_result',

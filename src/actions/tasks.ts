@@ -1,5 +1,6 @@
 'use server'
 
+import { cache } from 'react'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import {
@@ -7,7 +8,7 @@ import {
   type TaskFilters, getUrgency,
 } from '@/types/tasks'
 
-export async function getCurrentUserRole(): Promise<UserRole> {
+export const getCurrentUserRole = cache(async (): Promise<UserRole> => {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return 'collaborator'
@@ -19,7 +20,7 @@ export async function getCurrentUserRole(): Promise<UserRole> {
     .single()
 
   return (data?.role as UserRole) ?? 'collaborator'
-}
+})
 
 export async function updateTaskStatus(taskId: string, newStatus: TaskStatus): Promise<void> {
   const supabase = await createClient()
@@ -66,6 +67,8 @@ export async function createTask(
   description?: string,
   assignedTo?: string,
   taskOwnerId?: string,
+  client?: string,
+  project?: string,
 ): Promise<{ error: string | null }> {
   const supabase = await createClient()
 
@@ -97,6 +100,8 @@ export async function createTask(
     priority,
     status:        'todo',
     position,
+    client:        client ?? null,
+    project:       project ?? null,
   })
 
   if (error) {
@@ -115,6 +120,7 @@ export async function updateTask(
     Task,
     | 'title' | 'description' | 'priority' | 'impact_level' | 'effort_tokens'
     | 'due_date' | 'estimated_start_date' | 'assigned_to' | 'task_owner_id'
+    | 'client' | 'project'
   >>,
 ): Promise<{ error: string | null }> {
   const supabase = await createClient()

@@ -3,6 +3,7 @@ import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { getTasks, getCurrentUserRole } from '@/actions/tasks'
 import { getUsers } from '@/actions/users'
+import { getClientsWithProjects } from '@/actions/clients'
 import { ChatDrawer } from '@/components/chat-drawer'
 import { SyncEmbeddingsButton } from '@/components/sync-embeddings-button'
 import { NewTaskDialog } from '@/components/new-task-dialog'
@@ -45,10 +46,11 @@ export default async function DashboardPage({
   if (sp(params, 'min_tokens'))      filters.min_tokens      = parseInt(sp(params, 'min_tokens')!)
   if (sp(params, 'max_tokens'))      filters.max_tokens      = parseInt(sp(params, 'max_tokens')!)
 
-  const [tasks, role, users] = await Promise.all([
+  const [tasks, role, users, clients] = await Promise.all([
     getTasks(filters),
     getCurrentUserRole(),
     getUsers(),
+    getClientsWithProjects().catch(() => [] as Awaited<ReturnType<typeof getClientsWithProjects>>),
   ])
 
   return (
@@ -63,6 +65,7 @@ export default async function DashboardPage({
           <NewTaskDialog
             role={role as UserRole}
             users={users}
+            clients={clients}
             currentUserId={user.id}
           />
           <SyncEmbeddingsButton role={role as UserRole} />
@@ -84,6 +87,7 @@ export default async function DashboardPage({
           initialTasks={tasks}
           role={role as UserRole}
           users={users}
+          clients={clients}
           currentUserId={user.id}
         />
       </main>

@@ -55,13 +55,9 @@ export async function getUsers(): Promise<UserOption[]> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return []
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  const role = profile?.role ?? 'collaborator'
+  // Use cached role — avoids a second DB round-trip when called alongside getCurrentUserRole()
+  const { getCurrentUserRole } = await import('@/actions/tasks')
+  const role = await getCurrentUserRole()
   if (role === 'collaborator') return []
 
   const { data: profiles } = await supabase

@@ -8,6 +8,7 @@ import {
   type TaskPriority, type ImpactLevel, type UserRole,
 } from '@/types/tasks'
 import { type UserOption } from '@/actions/users'
+import { type ClientOption } from '@/actions/clients'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
 } from '@/components/ui/dialog'
@@ -19,10 +20,11 @@ import {
 interface NewTaskDialogProps {
   role?: UserRole
   users?: UserOption[]
+  clients?: ClientOption[]
   currentUserId?: string
 }
 
-export function NewTaskDialog({ role = 'collaborator', users = [], currentUserId }: NewTaskDialogProps) {
+export function NewTaskDialog({ role = 'collaborator', users = [], clients = [], currentUserId }: NewTaskDialogProps) {
   const [open, setOpen]               = useState(false)
   const [title, setTitle]             = useState('')
   const [priority, setPriority]       = useState<TaskPriority>('medium')
@@ -32,6 +34,8 @@ export function NewTaskDialog({ role = 'collaborator', users = [], currentUserId
   const [dueDate, setDueDate]         = useState('')
   const [assignedTo, setAssignedTo]   = useState<string>(currentUserId ?? '')
   const [taskOwner, setTaskOwner]     = useState<string>(currentUserId ?? '')
+  const [client, setClient]           = useState('')
+  const [project, setProject]         = useState('')
   const [error, setError]             = useState<string | null>(null)
   const [isPending, startTransition]  = useTransition()
 
@@ -39,7 +43,7 @@ export function NewTaskDialog({ role = 'collaborator', users = [], currentUserId
 
   function reset() {
     setTitle(''); setPriority('medium'); setImpact(''); setDescription('')
-    setTokens(''); setDueDate('')
+    setTokens(''); setDueDate(''); setClient(''); setProject('')
     setAssignedTo(currentUserId ?? '')
     setTaskOwner(currentUserId ?? '')
     setError(null)
@@ -61,6 +65,8 @@ export function NewTaskDialog({ role = 'collaborator', users = [], currentUserId
         description.trim() || undefined,
         canAssign ? assignedTo || undefined : undefined,
         canAssign ? taskOwner  || undefined : undefined,
+        client.trim() || undefined,
+        project.trim() || undefined,
       )
       if (result.error) {
         setError(result.error)
@@ -160,6 +166,71 @@ export function NewTaskDialog({ role = 'collaborator', users = [], currentUserId
                 onChange={e => setDueDate(e.target.value)}
                 className="bg-white/5 border-white/10 text-white text-xs h-8"
               />
+            </div>
+          </div>
+
+          {/* Client + Project */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] text-neutral-400 uppercase tracking-wider">Cliente</label>
+              {clients.length > 0 ? (
+                <Select value={client} onValueChange={val => { setClient(val === '__none__' ? '' : val); setProject('') }}>
+                  <SelectTrigger className="w-full bg-white/5 border-white/10 text-white text-xs h-8">
+                    <SelectValue placeholder="Sin cliente" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#1a1a2e] border-white/10 text-white z-[60]">
+                    <SelectItem value="__none__" className="text-neutral-500 focus:bg-white/10 text-xs">Sin cliente</SelectItem>
+                    {clients.filter(c => c.status === 'active').map(c => (
+                      <SelectItem key={c.id} value={c.name} className="text-white focus:bg-white/10 text-xs">{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  type="text"
+                  placeholder="Opcional"
+                  value={client}
+                  onChange={e => setClient(e.target.value)}
+                  className="bg-white/5 border-white/10 text-white placeholder:text-neutral-500 text-xs h-8"
+                />
+              )}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] text-neutral-400 uppercase tracking-wider">Proyecto</label>
+              {clients.length > 0 ? (() => {
+                const selectedClient = clients.find(c => c.name === client)
+                const projs = selectedClient?.projects.filter(p => p.status === 'active') ?? []
+                return projs.length > 0 ? (
+                  <Select value={project} onValueChange={val => setProject(val === '__none__' ? '' : val)}>
+                    <SelectTrigger className="w-full bg-white/5 border-white/10 text-white text-xs h-8">
+                      <SelectValue placeholder="Sin proyecto" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#1a1a2e] border-white/10 text-white z-[60]">
+                      <SelectItem value="__none__" className="text-neutral-500 focus:bg-white/10 text-xs">Sin proyecto</SelectItem>
+                      {projs.map(p => (
+                        <SelectItem key={p.id} value={p.name} className="text-white focus:bg-white/10 text-xs">{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    type="text"
+                    placeholder={client ? 'Sin proyectos registrados' : 'Selecciona cliente primero'}
+                    value={project}
+                    onChange={e => setProject(e.target.value)}
+                    disabled={!client}
+                    className="bg-white/5 border-white/10 text-white placeholder:text-neutral-500 text-xs h-8 disabled:opacity-40"
+                  />
+                )
+              })() : (
+                <Input
+                  type="text"
+                  placeholder="Opcional"
+                  value={project}
+                  onChange={e => setProject(e.target.value)}
+                  className="bg-white/5 border-white/10 text-white placeholder:text-neutral-500 text-xs h-8"
+                />
+              )}
             </div>
           </div>
 

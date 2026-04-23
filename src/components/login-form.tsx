@@ -73,6 +73,7 @@ export function LoginForm({ defaultTab, serverError }: LoginFormProps) {
           <div className="flex flex-col gap-1.5">
             <label htmlFor="email" className="text-sm text-neutral-400">
               Correo electrónico
+              {isSignup && <span className="ml-1 text-[11px] text-neutral-600">(@qudox.io)</span>}
             </label>
             <input
               id="email"
@@ -80,7 +81,7 @@ export function LoginForm({ defaultTab, serverError }: LoginFormProps) {
               type="email"
               autoComplete="email"
               required
-              placeholder="tu@email.com"
+              placeholder={isSignup ? 'nombre@qudox.io' : 'tu@qudox.io'}
               className="bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-blue-500 transition-colors"
             />
           </div>
